@@ -1,3 +1,10 @@
+frontend/eslint.config.js
+frontend/node_modules/
+frontend/tsconfig.app.json
+frontend/tsconfig.json
+frontend/tsconfig.node.json
+
+
 .idea
 alembic.ini
 .env
