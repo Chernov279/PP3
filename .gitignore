@@ -1,8 +1,8 @@
-frontend1/eslint.config.js
-frontend1/node_modules/
-frontend1/tsconfig.app.json
-frontend1/tsconfig.json
-frontend1/tsconfig.node.json
+frontend/eslint.config.js
+frontend/node_modules/
+frontend/tsconfig.app.json
+frontend/tsconfig.json
+frontend/tsconfig.node.json
 
 
 .idea
