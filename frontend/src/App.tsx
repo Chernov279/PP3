@@ -4,22 +4,35 @@ import { MovieCatalog } from "./components/MovieCatalog";
 import { AccountPage } from "./components/AccountPage";
 import { SearchDialog } from "./components/SearchDialog";
 import { MovieDetailsDialog } from "./components/MovieDetailsDialog";
-import { mockMovies, initialUserProfile } from "./data/mockData";
-import { Movie, UserProfile } from "./types/movie";
+import { mockMovies } from "./data/mockData";
+import { Movie } from "./types/movie";
+import { AuthDialog } from "./components/AuthDialog";
+import { useAuth, AuthProvider } from "./contexts/AuthContext";
+import { toast } from "sonner";
 
 type View = "catalog" | "account";
 
-export default function App() {
+  function AppContent() {
+  const { user, isAuthenticated, updateUserProfile, logout } = useAuth();
   const [currentView, setCurrentView] = useState<View>("catalog");
-  const [userProfile, setUserProfile] = useState<UserProfile>(initialUserProfile);
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
   const [isMovieDialogOpen, setIsMovieDialogOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false);
   
   // Состояния для фильтров
   const [popularityWeight, setPopularityWeight] = useState<number[]>([50]); // 0 = популярные, 100 = нишевые
   const [minRating, setMinRating] = useState<number[]>([0]);
-  const [yearRange, setYearRange] = useState<number[]>([1900]); // минимальный год выпуска
+  const [yearRange, setYearRange] = useState<number[]>([1900]);
+
+  const userProfile = user?.profile || {
+    favoriteGenres: [],
+    favoriteActors: [],
+    watchedMovies: [],
+    favoriteMovies: [],
+    imdbConnected: false,
+    kinopoiskConnected: false,
+  };
 
   // Фильтруем фильмы на основе предпочтений пользователя и фильтров
   const getRecommendedMovies = () => {
@@ -71,12 +84,26 @@ export default function App() {
 
     const isFavorite = userProfile.favoriteMovies.includes(selectedMovie.id);
     
-    setUserProfile({
+    updateUserProfile({
       ...userProfile,
       favoriteMovies: isFavorite
         ? userProfile.favoriteMovies.filter((id) => id !== selectedMovie.id)
         : [...userProfile.favoriteMovies, selectedMovie.id],
     });
+  };
+
+  const handleAccountClick = () => {
+    if (isAuthenticated) {
+      setCurrentView("account");
+    } else {
+      setIsAuthDialogOpen(true);
+    }
+  };
+
+  const handleLogout = () => {
+    logout();
+    toast.success("Вы вышли из аккаунта");
+    setCurrentView("catalog");
   };
 
   const isFavorite = selectedMovie
@@ -87,8 +114,12 @@ export default function App() {
     <div className="min-h-screen bg-background">
       <Header
         onSearchClick={() => setIsSearchOpen(true)}
-        onAccountClick={() => setCurrentView("account")}
+        onAccountClick={handleAccountClick}
         onLogoClick={() => setCurrentView("catalog")}
+        onLoginClick={() => setIsAuthDialogOpen(true)}
+        isAuthenticated={isAuthenticated}
+        userName={user?.name}
+        onLogout={handleLogout}
       />
 
       {currentView === "catalog" && (
@@ -107,7 +138,7 @@ export default function App() {
       {currentView === "account" && (
         <AccountPage
           profile={userProfile}
-          onUpdateProfile={setUserProfile}
+          onUpdateProfile={updateUserProfile}
           movies={mockMovies}
           onMovieClick={handleMovieClick}
           onBack={() => setCurrentView("catalog")}
@@ -128,6 +159,19 @@ export default function App() {
         isFavorite={isFavorite}
         onToggleFavorite={handleToggleFavorite}
       />
+
+      <AuthDialog
+        open={isAuthDialogOpen}
+        onOpenChange={setIsAuthDialogOpen}
+      />
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
