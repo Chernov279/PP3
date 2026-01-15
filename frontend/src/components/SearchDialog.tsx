@@ -1,5 +1,5 @@
-import { useState, Dispatch, SetStateAction } from "react";
-import { Search } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Search, X } from "lucide-react";
 import { 
   Dialog, 
   DialogContent, 
@@ -8,31 +8,65 @@ import {
   DialogDescription
 } from "./ui/dialog";
 import { Input } from "./ui/input";
-import { Movie } from "../types/movie";
+import { Movie } from "../types/api";
 import { MovieCard } from "./MovieCard";
+import { movieApi } from "../services/movieAPI";
 
 type SearchDialogProps = {
   open: boolean;
-  onOpenChange: Dispatch<SetStateAction<boolean>>;
-  movies: Movie[];
+  onOpenChange: (open: boolean) => void;
   onMovieClick: (movie: Movie) => void;
 };
 
 export function SearchDialog({
   open,
   onOpenChange,
-  movies,
   onMovieClick,
 }: SearchDialogProps) {
   const [searchQuery, setSearchQuery] = useState("");
+  const [filteredMovies, setFilteredMovies] = useState<Movie[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [debouncedQuery, setDebouncedQuery] = useState("");
 
-  const filteredMovies = movies.filter((movie) => {
-    const q = searchQuery.toLowerCase();
-    return (
-      movie.title.toLowerCase().includes(q) ||
-      movie.titleRu?.toLowerCase().includes(q)
-    );
-  });
+  // Дебаунс запроса
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(searchQuery);
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  // Выполняем поиск
+  useEffect(() => {
+    const performSearch = async () => {
+      if (!debouncedQuery.trim()) {
+        setFilteredMovies([]);
+        return;
+      }
+
+      setIsSearching(true);
+      try {
+        const result = await movieApi.searchMovies({
+          q: debouncedQuery,
+          per_page: 20,
+        });
+        setFilteredMovies(result.items);
+      } catch (error) {
+        console.error('Search error:', error);
+        setFilteredMovies([]);
+      } finally {
+        setIsSearching(false);
+      }
+    };
+
+    performSearch();
+  }, [debouncedQuery]);
+
+  const handleClear = () => {
+    setSearchQuery("");
+    setFilteredMovies([]);
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -50,12 +84,24 @@ export function SearchDialog({
             placeholder="Введите название фильма..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
+            className="pl-10 pr-10"
           />
+          {searchQuery && (
+            <button
+              onClick={handleClear}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          )}
         </div>
         
         <div className="overflow-y-auto max-h-[60vh]">
-          {searchQuery ? (
+          {isSearching ? (
+            <div className="text-center py-8 text-muted-foreground">
+              Поиск...
+            </div>
+          ) : searchQuery ? (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
               {filteredMovies.length > 0 ? (
                 filteredMovies.map((movie) => (

@@ -1,95 +1,99 @@
-import { useState } from "react";
+// App.tsx
+import { useState, useEffect } from "react";
 import { Header } from "./components/Header";
 import { MovieCatalog } from "./components/MovieCatalog";
 import { AccountPage } from "./components/AccountPage";
 import { SearchDialog } from "./components/SearchDialog";
 import { MovieDetailsDialog } from "./components/MovieDetailsDialog";
-import { mockMovies } from "./data/mockData";
-import { Movie } from "./types/movie";
+import { Movie } from "./types/api";
 import { AuthDialog } from "./components/AuthDialog";
 import { useAuth, AuthProvider } from "./contexts/AuthContext";
 import { toast } from "sonner";
+import { movieApi } from "./services/movieAPI";
 
 type View = "catalog" | "account";
 
-  function AppContent() {
-  const { user, isAuthenticated, updateUserProfile, logout } = useAuth();
+function AppContent() {
+  const { user, profile, isAuthenticated, updateUserProfile, logout } = useAuth();
   const [currentView, setCurrentView] = useState<View>("catalog");
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
   const [isMovieDialogOpen, setIsMovieDialogOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false);
   
-  // Состояния для фильтров
-  const [popularityWeight, setPopularityWeight] = useState<number[]>([50]); // 0 = популярные, 100 = нишевые
+  const [popularityWeight, setPopularityWeight] = useState<number[]>([50]);
   const [minRating, setMinRating] = useState<number[]>([0]);
   const [yearRange, setYearRange] = useState<number[]>([1900]);
+  
+  const [recommendedMovies, setRecommendedMovies] = useState<Movie[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const userProfile = user?.profile || {
-    favoriteGenres: [],
-    favoriteActors: [],
-    watchedMovies: [],
-    favoriteMovies: [],
-    imdbConnected: false,
-    kinopoiskConnected: false,
+  useEffect(() => {
+    loadRecommendations();
+  }, [popularityWeight[0], minRating[0], yearRange[0], isAuthenticated]);
+
+  const loadRecommendations = async () => {
+    try {
+      setIsLoading(true);
+      const movies = await movieApi.getRecommendations({
+        popularity_weight: popularityWeight[0],
+        min_rating: minRating[0],
+        year_from: yearRange[0],
+        limit: 20,
+      });
+      setRecommendedMovies(movies);
+    } catch (error) {
+      console.error('Failed to load recommendations:', error);
+      toast.error('Ошибка загрузки рекомендаций');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  // Фильтруем фильмы на основе предпочтений пользователя и фильтров
-  const getRecommendedMovies = () => {
-    return mockMovies.filter((movie) => {
-      // Проверяем совпадение с любимыми жанрами
-      const hasMatchingGenre = movie.genres.some((genre) =>
-        userProfile.favoriteGenres.includes(genre)
-      );
-
-      // Проверяем совпадение с любимыми актёрами
-      const hasMatchingActor = movie.actors.some((actor) =>
-        userProfile.favoriteActors.includes(actor)
-      );
-
-      // Если нет предпочтений, показываем все фильмы
-      const matchesPreferences = userProfile.favoriteGenres.length === 0 && userProfile.favoriteActors.length === 0
-        ? true
-        : hasMatchingGenre || hasMatchingActor;
-
-      if (!matchesPreferences) return false;
-
-      // Фильтр по рейтингу
-      if (movie.rating < minRating[0]) return false;
-
-      // Фильтр по году
-      if (movie.year < yearRange[0]) return false;
-
-      // Фильтр по популярности
-      // popularityWeight: 0-30 = популярные (popularity > 70)
-      // popularityWeight: 30-70 = все
-      // popularityWeight: 70-100 = нишевые (popularity < 70)
-      const weight = popularityWeight[0];
-      if (weight < 30 && movie.popularity < 70) return false;
-      if (weight > 70 && movie.popularity > 70) return false;
-
-      return true;
-    });
+  const handleMovieClick = async (movie: Movie) => {
+    try {
+      setSelectedMovie(movie);
+      setIsMovieDialogOpen(true);
+      
+      if (isAuthenticated) {
+        await movieApi.markAsWatched(movie.id);
+      }
+    } catch (error) {
+      console.error('Failed to mark as watched:', error);
+      setSelectedMovie(movie);
+      setIsMovieDialogOpen(true);
+    }
   };
 
-  const recommendedMovies = getRecommendedMovies();
-
-  const handleMovieClick = (movie: Movie) => {
-    setSelectedMovie(movie);
-    setIsMovieDialogOpen(true);
-  };
-
-  const handleToggleFavorite = () => {
+  const handleToggleFavorite = async () => {
     if (!selectedMovie) return;
 
-    const isFavorite = userProfile.favoriteMovies.includes(selectedMovie.id);
-    
-    updateUserProfile({
-      ...userProfile,
-      favoriteMovies: isFavorite
-        ? userProfile.favoriteMovies.filter((id) => id !== selectedMovie.id)
-        : [...userProfile.favoriteMovies, selectedMovie.id],
-    });
+    try {
+      const result = await movieApi.toggleFavorite(selectedMovie.id);
+      
+      if (profile) {
+        const isCurrentlyFavorite = profile.favorite_movies.includes(selectedMovie.id);
+        const updatedFavorites = isCurrentlyFavorite
+          ? profile.favorite_movies.filter(id => id !== selectedMovie.id)
+          : [...profile.favorite_movies, selectedMovie.id];
+        
+        await updateUserProfile({
+          favorite_movies: updatedFavorites,
+        });
+      }
+      
+      setRecommendedMovies(prev =>
+        prev.map(movie =>
+          movie.id === selectedMovie.id
+            ? { ...movie, is_favorite: result.is_favorite }
+            : movie
+        )
+      );
+      
+      toast.success(result.is_favorite ? 'Добавлено в избранное' : 'Удалено из избранного');
+    } catch (error) {
+      toast.error('Ошибка обновления избранного');
+    }
   };
 
   const handleAccountClick = () => {
@@ -100,14 +104,14 @@ type View = "catalog" | "account";
     }
   };
 
-  const handleLogout = () => {
-    logout();
-    toast.success("Вы вышли из аккаунта");
+  const handleLogout = async () => {
+    await logout();
     setCurrentView("catalog");
+    loadRecommendations();
   };
 
-  const isFavorite = selectedMovie
-    ? userProfile.favoriteMovies.includes(selectedMovie.id)
+  const isFavorite = selectedMovie && profile
+    ? profile.favorite_movies.includes(selectedMovie.id)
     : false;
 
   return (
@@ -132,14 +136,14 @@ type View = "catalog" | "account";
           onMinRatingChange={setMinRating}
           yearRange={yearRange}
           onYearRangeChange={setYearRange}
+          isLoading={isLoading}
         />
       )}
 
-      {currentView === "account" && (
+      {currentView === "account" && profile && (
         <AccountPage
-          profile={userProfile}
+          profile={profile}
           onUpdateProfile={updateUserProfile}
-          movies={mockMovies}
           onMovieClick={handleMovieClick}
           onBack={() => setCurrentView("catalog")}
         />
@@ -148,7 +152,6 @@ type View = "catalog" | "account";
       <SearchDialog
         open={isSearchOpen}
         onOpenChange={setIsSearchOpen}
-        movies={mockMovies}
         onMovieClick={handleMovieClick}
       />
 

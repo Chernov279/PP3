@@ -20,7 +20,7 @@ export function FilterPanel({
 }: FilterPanelProps) {
   return (
     <div className="container mx-auto px-4 py-6 space-y-6 bg-muted/30 rounded-lg">
-      <h3 className="text-muted-foreground">Фильтры</h3>
+      <h3 className="text-lg font-semibold text-muted-foreground">Фильтры</h3>
       
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* Фильтр популярности */}
@@ -79,7 +79,7 @@ export function FilterPanel({
             value={yearRange}
             onValueChange={onYearRangeChange}
             min={1900}
-            max={2025}
+            max={new Date().getFullYear()}
             step={1}
             className="w-full"
           />
