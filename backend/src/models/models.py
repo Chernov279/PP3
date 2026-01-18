@@ -1,11 +1,40 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, Date, JSON, Float, Boolean
-from sqlalchemy.orm import relationship
+from typing import List, Any, Optional
 
-from ..database.connection import Base
-from datetime import datetime
+from sqlalchemy import Column, Integer, String, DateTime, Text, Date, JSON, Float, Boolean, ForeignKey
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+
+from datetime import datetime, timezone
 
 
-class Profile(Base):
+class DeclarativeBaseModel(DeclarativeBase):
+    """Базовая модель в базе данных с общими методами."""
+    __abstract__ = True
+
+    @classmethod
+    def get_pk_columns_names(cls) -> List[str]:
+        """Получает имена всех первичных ключей модели."""
+        return [key.name for key in cls.__mapper__.primary_key]
+
+    @classmethod
+    def get_pk_columns(cls) -> List[Any]:
+        """
+        Получает объекты колонок, являющихся первичными ключами модели.
+        Обычно используется для выбора конкретных колонок в базе данных через model_columns
+        User.get_pk_columns() -> [User.id,]
+        """
+        pk_column_names = [col.name for col in cls.__mapper__.primary_key]
+        return [getattr(cls, column_name) for column_name in pk_column_names]
+
+    @classmethod
+    def get_columns_by_names(cls, *column_names) -> List[Any]:
+        """Получает объекты колонок по их именам.
+        Обычно используется для выбора конкретных колонок в базе данных через model_columns
+        User.get_columns_by_names("name", "surname", "email") -> [User.name, User.surname, User.email]
+        """
+        return [getattr(cls, column_name) for column_name in column_names]
+
+
+class Profile(DeclarativeBaseModel):
     __tablename__ = "profiles"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -14,7 +43,7 @@ class Profile(Base):
     avatar_url = Column(String, nullable=True)
 
 
-class Movie(Base):
+class Movie(DeclarativeBaseModel):
     __tablename__ = "movies"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -45,32 +74,23 @@ class Movie(Base):
     keywords = Column(JSON)  # ключевые слова фильма
     content_score = Column(Float)  # вычисляемый score для контентной фильтрации
 
-    # Связи
-    genres = relationship("Genre", secondary="movie_genres", back_populates="movies")
-    actors = relationship("Actor", secondary="movie_actors", back_populates="movies")
-    directors = relationship("Director", secondary="movie_directors", back_populates="movies")
-    reviews = relationship("Review", back_populates="movie")
-
-
-class Genre(Base):
+class Genre(DeclarativeBaseModel):
     __tablename__ = "genres"
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True)
     description = Column(String)
 
-    movies = relationship("Movie", secondary="movie_genres", back_populates="genres")
-
 
 # Association table
-class MovieGenre(Base):
+class MovieGenre(DeclarativeBaseModel):
     __tablename__ = "movie_genres"
 
     movie_id = Column(Integer, primary_key=True)
     genre_id = Column(Integer, primary_key=True)
 
 
-class Actor(Base):
+class Actor(DeclarativeBaseModel):
     __tablename__ = "actors"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -85,10 +105,8 @@ class Actor(Base):
     popularity = Column(Float)
     average_rating = Column(Float)  # средний рейтинг фильмов с участием
 
-    movies = relationship("Movie", secondary="movie_actors", back_populates="actors")
 
-
-class MovieActor(Base):
+class MovieActor(DeclarativeBaseModel):
     __tablename__ = "movie_actors"
 
     movie_id = Column(Integer, primary_key=True)
@@ -98,7 +116,7 @@ class MovieActor(Base):
     is_first_plan =Column(Boolean, default=False)
     order = Column(Integer)  # порядок в титрах
 
-class Director(Base):
+class Director(DeclarativeBaseModel):
     __tablename__ = "directors"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -113,21 +131,19 @@ class Director(Base):
     style_tags = Column(JSON)  # теги стиля режиссера
     average_rating = Column(Float)
 
-    movies = relationship("Movie", secondary="movie_directors", back_populates="directors")
 
-
-class MovieDirector(Base):
+class MovieDirector(DeclarativeBaseModel):
     __tablename__ = "movie_directors"
 
     movie_id = Column(Integer, primary_key=True)
     director_id = Column(Integer, primary_key=True)
 
 
-class User(Base):
+class User(DeclarativeBaseModel):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
-    username = Column(String, unique=True, index=True)
+    name = Column(String, unique=True, index=True)
     email = Column(String, unique=True, index=True)
     hashed_password = Column(String)
     created_at = Column(DateTime, default=datetime.utcnow)
@@ -138,11 +154,8 @@ class User(Base):
     favorite_directors = Column(JSON)
     preferred_languages = Column(JSON)
 
-    reviews = relationship("Review", back_populates="user")
-    watch_history = relationship("WatchHistory", back_populates="user")
 
-
-class Review(Base):
+class Review(DeclarativeBaseModel):
     __tablename__ = "reviews"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -153,11 +166,7 @@ class Review(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     likes = Column(Integer, default=0)
 
-    user = relationship("User", back_populates="reviews")
-    movie = relationship("Movie", back_populates="reviews")
-
-
-class WatchHistory(Base):
+class WatchHistory(DeclarativeBaseModel):
     __tablename__ = "watch_history"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -167,10 +176,8 @@ class WatchHistory(Base):
     watch_duration = Column(Integer)  # в минутах
     rating = Column(Float)  # автоматическая оценка на основе просмотра
 
-    user = relationship("User", back_populates="watch_history")
 
-
-class ContentFeatures(Base):
+class ContentFeatures(DeclarativeBaseModel):
     __tablename__ = "content_features"
 
     movie_id = Column(Integer, primary_key=True)
@@ -181,7 +188,7 @@ class ContentFeatures(Base):
     embedding = Column(JSON)  # общий эмбеддинг для косинусного сходства
 
 
-class UserPreferences(Base):
+class UserPreferences(DeclarativeBaseModel):
     __tablename__ = "user_preferences"
 
     user_id = Column(Integer, primary_key=True)
@@ -192,9 +199,77 @@ class UserPreferences(Base):
     updated_at = Column(DateTime, default=datetime.utcnow)
 
 
-class SimilarMovies(Base):
+class SimilarMovies(DeclarativeBaseModel):
     __tablename__ = "similar_movies"
 
     movie_id = Column(Integer, primary_key=True)
     similar_movies = Column(JSON)  # {movie_id: similarity_score}
     updated_at = Column(DateTime, default=datetime.utcnow)
+
+class RefreshToken(DeclarativeBaseModel):
+    """
+    Модель refresh-токена (серверное состояние сессии).
+
+    Один refresh-токен = одна строка в таблице.
+    Используется для:
+    - обновления access-токена,
+    - logout с одного устройства,
+    - logout со всех устройств пользователя.
+
+    Атрибуты:
+        id (int): Surrogate PK. Используется только БД, не участвует в бизнес-логике.
+        user_id (int): ID пользователя.
+        token_hash (str): SHA-256 хэш refresh-токена. Уникален.
+        device_fingerprint (str | None): Опциональная информация об устройстве.
+        expires_at (datetime): Время истечения refresh-токена.
+        revoked_at (datetime | None): Время отзыва токена. NULL = токен активен.
+        created_at (datetime): Время создания токена.
+        updated_at (datetime | None): Время последнего обновления записи.
+
+        user (User): Пользователь, которому принадлежит токен.
+    """
+
+    __tablename__ = "refresh_tokens"
+
+    id: Mapped[int] = mapped_column(
+        Integer,
+        primary_key=True,
+    )
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    token_hash: Mapped[str] = mapped_column(
+        String(64),
+        nullable=False,
+        unique=True,
+    )
+
+    device_fingerprint: Mapped[Optional[str]] = mapped_column(
+        String(255),
+        nullable=True,
+    )
+
+    # -------- Lifecycle --------
+    expires_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        nullable=False,
+    )
+
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    @property
+    def is_active(self) -> bool:
+        """
+        Возвращает True, если refresh-токен:
+        - не отозван
+        - не истёк
+        """
+        now = datetime.now(timezone.utc)
+        return self.revoked_at is None and self.expires_at > now

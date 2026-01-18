@@ -6,7 +6,9 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-routers = []
+from backend.src.auth.router import auth
+
+routers = [auth]
 
 
 # configure_logging(level="INFO")
