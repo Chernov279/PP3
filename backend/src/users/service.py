@@ -2,11 +2,13 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import JSONResponse
 
+from .helpers import sync_user_votes, fetch_user_votes
 from ..auth.repository import UserRepository
-from ..schemas.users import UserOut, UserUpdateIn
+from ..auth.schemas import UserUpdateIn, UserOut
 
 
 class UserService:
+
     def __init__(self, db_session: AsyncSession):
         self._db_session = db_session
         self._user_repo = UserRepository(db_session)
@@ -31,3 +33,8 @@ class UserService:
             await self._db_session.commit()
             return JSONResponse(status_code=204, content={"message": "User deleted successfully"})
         return HTTPException(status_code=404, detail="User not found")
+
+    async def add_kinopoisk_info(self, kinopoisk_id, user_id):
+        items = await fetch_user_votes(kinopoisk_id)
+        await sync_user_votes(items, user_id, self._db_session)
+        return JSONResponse(status_code=204, content={"message": "User info added successfully"})

@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 from .service import UserService
 from ..auth.dependencies import get_token_sub_required
+from ..auth.schemas import UserOut, UserUpdateIn
 from ..database.connection import get_db_session
-from ..schemas.users import UserOut, UserUpdateIn
 
 user = APIRouter(prefix="/user", tags=["user"])
 async def get_user_service(
@@ -42,3 +42,11 @@ async def delete_user(
     user_service: UserService = Depends(get_user_service)
 ):
     return await user_service.delete_user(user_id)
+
+@user.post("/kinopoisk_info")
+async def add_kinopoisk_info(
+        kinopoisk_id: int,
+        user_id: int = Depends(get_token_sub_required),
+        user_service: UserService = Depends(get_user_service)
+):
+    return await user_service.add_kinopoisk_info(kinopoisk_id, user_id)

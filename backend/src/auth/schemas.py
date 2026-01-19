@@ -52,3 +52,16 @@ class LogoutOut(BaseSchema):
     message: str = "Successfully logged out from device"
     device_logged_out: bool
     timestamp: str
+
+class UserUpdateIn(UserBaseSchema):
+    name : str
+    email : str
+
+
+class UserOut(UserBaseSchema):
+    id: int
+    email: str
+    name: str
+
+    class Config:
+        from_attributes = True
