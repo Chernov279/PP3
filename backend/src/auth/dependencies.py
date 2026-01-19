@@ -1,10 +1,12 @@
 from typing import Optional
 
-from fastapi import Depends, Body, Cookie
+from fastapi import Depends, Body, Cookie, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
 
+from backend.src.auth.exceptions import TokenMissingException
 from backend.src.auth.service import AuthService
+from backend.src.auth.utils import get_sub_from_token
 from backend.src.database.connection import get_db_session
 
 
@@ -22,35 +24,39 @@ async def get_refresh_token(
     return token
 
 
-def get_optional_token(request: Request) -> Optional[str]:
+def get_optional_token(access_token: str) -> Optional[str]:
     """
     Получает токен из заголовка Authorization.
     Если токена нет — просто возвращает None, без ошибки 401.
     """
-    authorization: Optional[str] = request.headers.get("Authorization")
-    if authorization and authorization.startswith("Bearer "):
-        return authorization.split("Bearer ")[1]
+    if access_token and access_token.startswith("Authorization: Bearer "):
+        token_str = access_token.split("Bearer ")[1]
+        if token_str:
+            return token_str
     return None
 
 
-def get_token_sub_required(request: Request) -> Optional[int]:
+def get_token_sub_required(access_token: str | None = Header("Authorization: Bearer ")) -> Optional[int]:
     """
     Получает значение sub - обычно user_id - из заголовка Authorization через токен.
     Если токена нет — возвращает ошибку.
     """
-    token = get_optional_token(request)
+    token = get_optional_token(access_token)
+    print(token)
     if token is None:
         raise TokenMissingException()
     sub = get_sub_from_token(token, raise_exception=True)
     return sub
 
 
-def get_token_sub_optional(request: Request) -> Optional[int]:
+def get_token_sub_optional(access_token: str | None = Header("Authorization: Bearer ")) -> Optional[int]:
     """
     Получает значение sub - обычно user_id - из заголовка Authorization через токен.
     Если токена нет ли он невалидный — просто возвращает None, без ошибки.
     """
-    token = get_optional_token(request)
+    if access_token is None:
+        return None
+    token = get_optional_token(access_token)
     if token is None:
         return None
 

@@ -1,27 +1,33 @@
-from .repository import ProfileRepository
-from ..schemas.users import ProfileCreate, ProfileResponse
+from fastapi import HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from starlette.responses import JSONResponse
+
+from ..auth.repository import UserRepository
+from ..schemas.users import UserOut, UserUpdateIn
 
 
-class ProfileService:
-    def __init__(self, profile_repository: ProfileRepository):
-        self.profile_repository = profile_repository
+class UserService:
+    def __init__(self, db_session: AsyncSession):
+        self._db_session = db_session
+        self._user_repo = UserRepository(db_session)
 
-    def get_user_profile(self, user_id: int) -> ProfileResponse:
-        profile = self.profile_repository.get_profile_by_user_id(user_id)
-        if not profile:
-            raise ValueError("Profile not found")
-        return ProfileResponse.from_orm(profile)
+    async def get_user(self, user_id: int):
+        user = await self._user_repo.get_user_by_id(user_id, selected_columns=UserOut.get_model_columns())
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
 
-    def create_profile(self, profile_data: ProfileCreate) -> ProfileResponse:
-        existing_profile = self.profile_repository.get_profile_by_user_id(profile_data.user_id)
-        if existing_profile:
-            raise ValueError("Profile already exists")
+        return UserOut.model_validate(user)
 
-        profile = self.profile_repository.create_profile(profile_data)
-        return ProfileResponse.from_orm(profile)
 
-    def update_profile(self, user_id: int, profile_data: ProfileCreate) -> ProfileResponse:
-        profile = self.profile_repository.update_profile(user_id, profile_data)
-        if not profile:
-            raise ValueError("Profile not found")
-        return ProfileResponse.from_orm(profile)
+    async def update_user(self, user_id: int, user_data: UserUpdateIn) -> UserOut:
+        user = await self._user_repo.update_user_returning(user_data, user_id, UserOut.get_model_columns())
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        await self._db_session.commit()
+        return UserOut.model_validate(user)
+
+    async def delete_user(self, user_id: int):
+        if await self._user_repo.delete_user(user_id):
+            await self._db_session.commit()
+            return JSONResponse(status_code=204, content={"message": "User deleted successfully"})
+        return HTTPException(status_code=404, detail="User not found")

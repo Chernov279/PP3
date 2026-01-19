@@ -7,8 +7,9 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from backend.src.auth.router import auth
+from backend.src.users.router import user
 
-routers = [auth]
+routers = [auth, user]
 
 
 # configure_logging(level="INFO")

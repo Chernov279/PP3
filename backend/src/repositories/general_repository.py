@@ -49,6 +49,7 @@ class SQLAlchemyRepository(AbstractRepository, Generic[T]):
 
         if options:
             stmt = stmt.options(*options)
+
         stmt = await self.db_session.execute(stmt)
         if scalar:
             return stmt.scalar_one_or_none()

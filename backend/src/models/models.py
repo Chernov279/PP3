@@ -3,7 +3,7 @@ from typing import List, Any, Optional
 from sqlalchemy import Column, Integer, String, DateTime, Text, Date, JSON, Float, Boolean, ForeignKey
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 
 
 class DeclarativeBaseModel(DeclarativeBase):
@@ -37,174 +37,175 @@ class DeclarativeBaseModel(DeclarativeBase):
 class Profile(DeclarativeBaseModel):
     __tablename__ = "profiles"
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, unique=True, index=True)
-    bio = Column(Text, nullable=True)
-    avatar_url = Column(String, nullable=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, unique=True, index=True)
+    bio: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    avatar_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)
 
 
 class Movie(DeclarativeBaseModel):
     __tablename__ = "movies"
 
-    id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, index=True)
-    original_title = Column(String)  # Оригинальное название
-    description = Column(Text)
-    trailer_date = Column(DateTime, default=datetime.utcnow)
-    release_date = Column(Date)
-    duration = Column(Integer)  # в минутах
-    budget = Column(Integer)  # бюджет в долларах
-    revenue = Column(Integer)  # сборы в долларах
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    title: Mapped[str] = mapped_column(String, index=True)
+    original_title: Mapped[str] = mapped_column(String)  # Оригинальное название
+    description: Mapped[str] = mapped_column(Text)
+    trailer_date: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    release_date: Mapped[date] = mapped_column(Date)
+    duration: Mapped[int] = mapped_column(Integer)  # в минутах
+    budget: Mapped[int] = mapped_column(Integer)  # бюджет в долларах
+    revenue: Mapped[int] = mapped_column(Integer)  # сборы в долларах
 
     # Рейтинги
-    kp_rating = Column(Float)  # КиноПоиск
-    imdb_rating = Column(Float)  # IMDB
-    metacritic_rating = Column(Float)  # Metacritic
+    kp_rating: Mapped[float] = mapped_column(Float)  # КиноПоиск
+    imdb_rating: Mapped[float] = mapped_column(Float)  # IMDB
+    metacritic_rating: Mapped[float] = mapped_column(Float)  # Metacritic
 
     # Статистика
-    vote_count = Column(Integer)  # количество оценок
-    popularity = Column(Float)  # популярность (TMDB)
+    vote_count: Mapped[int] = mapped_column(Integer)  # количество оценок
+    popularity: Mapped[float] = mapped_column(Float)  # популярность (TMDB)
 
     # Технические характеристики
-    language = Column(String)
-    country = Column(String)
-    status = Column(String)  # Released, Post Production, etc
+    language: Mapped[str] = mapped_column(String)
+    country: Mapped[str] = mapped_column(String)
+    status: Mapped[str] = mapped_column(String)  # Released, Post Production, etc
 
     # Для рекомендаций
-    keywords = Column(JSON)  # ключевые слова фильма
-    content_score = Column(Float)  # вычисляемый score для контентной фильтрации
+    keywords: Mapped[Optional[dict]] = mapped_column(JSON)  # ключевые слова фильма
+    content_score: Mapped[float] = mapped_column(Float)  # вычисляемый score для контентной фильтрации
 
 class Genre(DeclarativeBaseModel):
     __tablename__ = "genres"
 
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, index=True)
-    description = Column(String)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String, unique=True, index=True)
+    description: Mapped[str] = mapped_column(String)
 
 
 # Association table
 class MovieGenre(DeclarativeBaseModel):
     __tablename__ = "movie_genres"
 
-    movie_id = Column(Integer, primary_key=True)
-    genre_id = Column(Integer, primary_key=True)
+    movie_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    genre_id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
 
 class Actor(DeclarativeBaseModel):
     __tablename__ = "actors"
 
-    id = Column(Integer, primary_key=True, index=True)
-    first_name = Column(String)
-    last_name = Column(String)
-    birth_date = Column(Date)
-    death_date = Column(Date, nullable=True)
-    country = Column(String)
-    biography = Column(Text)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    first_name: Mapped[str] = mapped_column(String)
+    last_name: Mapped[str] = mapped_column(String)
+    birth_date: Mapped[date] = mapped_column(Date)
+    death_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    country: Mapped[str] = mapped_column(String)
+    biography: Mapped[str] = mapped_column(Text)
 
     # Для рекомендаций
-    popularity = Column(Float)
-    average_rating = Column(Float)  # средний рейтинг фильмов с участием
+    popularity: Mapped[float] = mapped_column(Float)
+    average_rating: Mapped[float] = mapped_column(Float)  # средний рейтинг фильмов с участием
 
 
 class MovieActor(DeclarativeBaseModel):
     __tablename__ = "movie_actors"
 
-    movie_id = Column(Integer, primary_key=True)
-    actor_id = Column(Integer, primary_key=True)
-    character_name = Column(String)  # имя персонажа
-    is_lead_role = Column(Boolean, default=False)
-    is_first_plan =Column(Boolean, default=False)
-    order = Column(Integer)  # порядок в титрах
+    movie_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    actor_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    character_name: Mapped[str] = mapped_column(String)  # имя персонажа
+    is_lead_role: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_first_plan: Mapped[bool] = mapped_column(Boolean, default=False)
+    order: Mapped[int] = mapped_column(Integer)  # порядок в титрах
 
 class Director(DeclarativeBaseModel):
     __tablename__ = "directors"
 
-    id = Column(Integer, primary_key=True, index=True)
-    first_name = Column(String)
-    last_name = Column(String)
-    birth_date = Column(Date)
-    death_date = Column(Date, nullable=True)
-    country = Column(String)
-    biography = Column(Text)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    first_name: Mapped[str] = mapped_column(String)
+    last_name: Mapped[str] = mapped_column(String)
+    birth_date: Mapped[date] = mapped_column(Date)
+    death_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    country: Mapped[str] = mapped_column(String)
+    biography: Mapped[str] = mapped_column(Text)
 
     # Для рекомендаций
-    style_tags = Column(JSON)  # теги стиля режиссера
-    average_rating = Column(Float)
+    style_tags: Mapped[Optional[dict]] = mapped_column(JSON)  # теги стиля режиссера
+    average_rating: Mapped[float] = mapped_column(Float)
 
 
 class MovieDirector(DeclarativeBaseModel):
     __tablename__ = "movie_directors"
 
-    movie_id = Column(Integer, primary_key=True)
-    director_id = Column(Integer, primary_key=True)
+    movie_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    director_id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
 
 class User(DeclarativeBaseModel):
     __tablename__ = "users"
 
-    id = Column(Integer, primary_key=True, index=True)
-    name = Column(String, unique=True, index=True)
-    email = Column(String, unique=True, index=True)
-    hashed_password = Column(String)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    name: Mapped[str] = mapped_column(String, unique=True, index=True)
+    email: Mapped[str] = mapped_column(String, unique=True, index=True)
+    hashed_password: Mapped[str] = mapped_column(String)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     # Предпочтения для рекомендаций
-    favorite_genres = Column(JSON)
-    favorite_actors = Column(JSON)
-    favorite_directors = Column(JSON)
-    preferred_languages = Column(JSON)
+    favorite_genres: Mapped[Optional[dict]] = mapped_column(JSON)
+    favorite_actors: Mapped[Optional[dict]] = mapped_column(JSON)
+    favorite_directors: Mapped[Optional[dict]] = mapped_column(JSON)
+    preferred_languages: Mapped[Optional[dict]] = mapped_column(JSON)
 
 
 class Review(DeclarativeBaseModel):
     __tablename__ = "reviews"
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, index=True)
-    movie_id = Column(Integer, index=True)
-    rating = Column(Float)  # 1-10
-    text = Column(Text)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    likes = Column(Integer, default=0)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    movie_id: Mapped[int] = mapped_column(Integer, index=True)
+    rating: Mapped[float] = mapped_column(Float)  # 1-10
+    text: Mapped[str] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    likes: Mapped[int] = mapped_column(Integer, default=0)
 
 class WatchHistory(DeclarativeBaseModel):
     __tablename__ = "watch_history"
 
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, index=True)
-    movie_id = Column(Integer, index=True)
-    watched_at = Column(DateTime, default=datetime.utcnow)
-    watch_duration = Column(Integer)  # в минутах
-    rating = Column(Float)  # автоматическая оценка на основе просмотра
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
+    user_id: Mapped[int] = mapped_column(Integer, index=True)
+    movie_id: Mapped[int] = mapped_column(Integer, index=True)
+    watched_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    watch_duration: Mapped[int] = mapped_column(Integer)  # в минутах
+    rating: Mapped[float] = mapped_column(Float)  # автоматическая оценка на основе просмотра
 
 
 class ContentFeatures(DeclarativeBaseModel):
     __tablename__ = "content_features"
 
-    movie_id = Column(Integer, primary_key=True)
-    genre_vector = Column(JSON)  # вектор жанров
-    actor_vector = Column(JSON)  # вектор актеров
-    director_vector = Column(JSON)  # вектор режиссеров
-    keyword_vector = Column(JSON)  # вектор ключевых слов
-    embedding = Column(JSON)  # общий эмбеддинг для косинусного сходства
+    movie_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    genre_vector: Mapped[Optional[dict]] = mapped_column(JSON)  # вектор жанров
+    actor_vector: Mapped[Optional[dict]] = mapped_column(JSON)  # вектор актеров
+    director_vector: Mapped[Optional[dict]] = mapped_column(JSON)  # вектор режиссеров
+    keyword_vector: Mapped[Optional[dict]] = mapped_column(JSON)  # вектор ключевых слов
+    embedding: Mapped[Optional[dict]] = mapped_column(JSON)  # общий эмбеддинг для косинусного сходства
 
 
 class UserPreferences(DeclarativeBaseModel):
     __tablename__ = "user_preferences"
 
-    user_id = Column(Integer, primary_key=True)
-    genre_weights = Column(JSON)  # веса предпочтений по жанрам
-    actor_weights = Column(JSON)  # веса предпочтений по актерам
-    director_weights = Column(JSON)  # веса предпочтений по режиссерам
-    rating_tendency = Column(Float)  # склонность к высоким/низким рейтингам
-    updated_at = Column(DateTime, default=datetime.utcnow)
+    user_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    genre_weights: Mapped[Optional[dict]] = mapped_column(JSON)  # веса предпочтений по жанрам
+    actor_weights: Mapped[Optional[dict]] = mapped_column(JSON)  # веса предпочтений по актерам
+    director_weights: Mapped[Optional[dict]] = mapped_column(JSON)  # веса предпочтений по режиссерам
+    rating_tendency: Mapped[float] = mapped_column(Float)  # склонность к высоким/низким рейтингам
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class SimilarMovies(DeclarativeBaseModel):
     __tablename__ = "similar_movies"
 
-    movie_id = Column(Integer, primary_key=True)
-    similar_movies = Column(JSON)  # {movie_id: similarity_score}
-    updated_at = Column(DateTime, default=datetime.utcnow)
+    movie_id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    similar_movies: Mapped[Optional[dict]] = mapped_column(JSON)  # {movie_id: similarity_score}
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 class RefreshToken(DeclarativeBaseModel):
     """

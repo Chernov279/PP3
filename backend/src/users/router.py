@@ -1,42 +1,44 @@
-from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy.orm import Session
-from ..database.connection import get_db
-from .repository import ProfileRepository
-from .service import ProfileService
-from ..schemas.users import ProfileCreate, ProfileResponse
+from fastapi import APIRouter, Depends
+from sqlalchemy.ext.asyncio import AsyncSession
+from .service import UserService
+from ..auth.dependencies import get_token_sub_required
+from ..database.connection import get_db_session
+from ..schemas.users import UserOut, UserUpdateIn
 
-router = APIRouter()
+user = APIRouter(prefix="/user", tags=["user"])
+async def get_user_service(
+    session: AsyncSession = Depends(get_db_session),
+) -> UserService:
+    return UserService(session)
 
-def get_profile_repository(db: Session = Depends(get_db)) -> ProfileRepository:
-    return ProfileRepository(db)
 
-def get_profile_service(profile_repo: ProfileRepository = Depends(get_profile_repository)) -> ProfileService:
-    return ProfileService(profile_repo)
-
-@router.get("/{user_id}/profile", response_model=ProfileResponse)
-async def get_profile(
-    user_id: int,
-    profile_service: ProfileService = Depends(get_profile_service)
+@user.get("/me")
+async def get_user_me(
+    user_id: int = Depends(get_token_sub_required),
+    user_service: UserService = Depends(get_user_service)
 ):
-    try:
-        return profile_service.get_user_profile(user_id)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=str(e)
-        )
+    return await user_service.get_user(user_id)
 
-@router.post("/{user_id}/profile", response_model=ProfileResponse)
-async def create_profile(
+
+@user.get("/{user_id}")
+async def get_user(
     user_id: int,
-    profile_data: ProfileCreate,
-    profile_service: ProfileService = Depends(get_profile_service)
+    user_service: UserService = Depends(get_user_service)
 ):
-    try:
-        profile_data.user_id = user_id
-        return profile_service.create_profile(profile_data)
-    except ValueError as e:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=str(e)
-        )
+    return await user_service.get_user(user_id)
+
+
+@user.put("/", response_model=UserOut)
+async def update_user(
+    user_data: UserUpdateIn,
+    user_id: int = Depends(get_token_sub_required),
+    user_service: UserService = Depends(get_user_service)
+):
+    return await user_service.update_user(user_id, user_data)
+
+@user.delete("/", response_model=UserOut)
+async def delete_user(
+    user_id: int = Depends(get_token_sub_required),
+    user_service: UserService = Depends(get_user_service)
+):
+    return await user_service.delete_user(user_id)

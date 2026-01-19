@@ -1,18 +1,14 @@
-from pydantic import BaseModel
+from backend.src.auth.schemas import UserBaseSchema
+
+class UserUpdateIn(UserBaseSchema):
+    name : str
+    email : str
 
 
-class ProfileBase(BaseModel):
-    bio: str = None
-    avatar_url: str = None
-
-
-class ProfileCreate(ProfileBase):
-    user_id: int
-
-
-class ProfileResponse(ProfileBase):
+class UserOut(UserBaseSchema):
     id: int
-    user_id: int
+    email: str
+    name: str
 
     class Config:
         from_attributes = True
