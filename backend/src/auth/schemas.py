@@ -1,8 +1,10 @@
 from datetime import datetime
+from typing import Optional
 
 from backend.src.config import ACCESS_TOKEN_EXPIRE_MINUTES
 from backend.src.models.models import User
 from backend.src.schemas.base import BaseSchema
+from backend.src.schemas.users import UserOut
 
 TOKEN_TYPE: str = 'Bearer'
 
@@ -34,6 +36,7 @@ class RefreshTokenInternal(BaseSchema):
 
 
 class TokensOut(BaseSchema):
+    user_id: Optional[int] = None
     access_token: str
     refresh_token: str
     token_type: str = TOKEN_TYPE
