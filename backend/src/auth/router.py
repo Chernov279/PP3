@@ -36,10 +36,6 @@ async def register_user(
     - `email` (str): Email пользователя (должен быть уникальным)
     - `password` (str): Пароль пользователя (будет захэширован)
 
-    **Тело запроса (опциональные поля):**
-    - `surname` (str): Фамилия пользователя
-    - `patronymic` (str): Отчество пользователя
-
     **Ответ:**
     - `access_token` (str): JWT access токен для авторизации в API
     - `refresh_token` (str): Refresh токен для получения новых access токенов

@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Optional
 
 from backend.src.config import ACCESS_TOKEN_EXPIRE_MINUTES
 from backend.src.models.models import User
@@ -34,6 +35,7 @@ class RefreshTokenInternal(BaseSchema):
 
 
 class TokensOut(BaseSchema):
+    user_id: Optional[int] = None
     access_token: str
     refresh_token: str
     token_type: str = TOKEN_TYPE
@@ -49,3 +51,16 @@ class LogoutOut(BaseSchema):
     message: str = "Successfully logged out from device"
     device_logged_out: bool
     timestamp: str
+
+class UserUpdateIn(UserBaseSchema):
+    name : str
+    email : str
+
+
+class UserOut(UserBaseSchema):
+    id: int
+    email: str
+    name: str
+
+    class Config:
+        from_attributes = True

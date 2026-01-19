@@ -47,6 +47,7 @@ class AuthService:
 
         await self._session.commit()
         return TokensOut(
+            user_id=user.id,
             access_token=create_access_token(user.id),
             refresh_token=refresh_token
         )
