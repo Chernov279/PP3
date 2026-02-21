@@ -4,9 +4,9 @@ from fastapi import Depends, Body, Cookie, Header
 from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.requests import Request
 
-from backend.src.auth.exceptions import TokenMissingException
-from backend.src.auth.service import AuthService
-from backend.src.auth.utils import get_sub_from_token
+from backend.src.api.auth.exceptions import TokenMissingException
+from backend.src.api.auth.service import AuthService
+from backend.src.api.auth.utils import get_sub_from_token
 from backend.src.database.connection import get_db_session
 
 

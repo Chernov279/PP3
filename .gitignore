@@ -4,7 +4,8 @@ frontend/tsconfig.app.json
 frontend/tsconfig.json
 frontend/tsconfig.node.json
 
-
+env.py
+.vscode/
 .idea
 alembic.ini
 .env

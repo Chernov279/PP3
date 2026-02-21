@@ -6,10 +6,12 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from backend.src.auth.router import auth
-from backend.src.users.router import user
+from backend.src.api.recommendation.router import recommendations
+from backend.src.api.films.router import films
+from backend.src.api.auth.router import auth
+from backend.src.api.users.router import user
 
-routers = [auth, user]
+routers = [auth, user, films, recommendations]
 
 
 # configure_logging(level="INFO")
@@ -47,4 +49,9 @@ async def shutdown_event():
     logger.info("Event shutdown ended")
 
 if __name__ == "__main__":
-    uvicorn.run("backend.src.main:app", host="0.0.0.0", reload=True)
+        uvicorn.run(
+        "backend.src.main:app",
+        host="0.0.0.0",
+        port=8000,
+        reload=True
+    )

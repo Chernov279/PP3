@@ -6,7 +6,7 @@ from typing import Optional, Union
 import jwt
 from fastapi import HTTPException
 
-from backend.src.config import SECRET_KEY, ACCESS_TOKEN_EXPIRE_MINUTES, ALGORITHM
+from backend.src.config import settings
 
 REFRESH_TOKEN_EXPIRE_DAYS = 30
 
@@ -117,11 +117,11 @@ def create_access_jwt_token(
     if expires_delta:
         expire = datetime.now(timezone.utc) + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     if data is not None:
         to_encode = data.copy()
         to_encode.update({"exp": expire})
-        encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
+        encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
         return encoded_jwt
     data = {
         "sub": f'{user_id}' if user_id else "",
@@ -129,7 +129,7 @@ def create_access_jwt_token(
         "type": "access"
     }
 
-    encoded_jwt = jwt.encode(data, SECRET_KEY, algorithm=ALGORITHM)
+    encoded_jwt = jwt.encode(data, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
     return encoded_jwt
 
 
@@ -149,7 +149,7 @@ def verify_jwt_token(token: str) -> dict | None:
     - `None`: Если токен недействителен или истёк.
     """
     try:
-        decoded_jwt = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        decoded_jwt = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         return decoded_jwt
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token has expired")
