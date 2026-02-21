@@ -3,10 +3,11 @@ from typing import Optional, List, Any, Union
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.src.models.models import User
+from backend.src.repositories.general_repository import SQLAlchemyRepository
+from backend.src.schemas.base import BaseSchema
+
 from .schemas import UserBaseSchema
-from ..models.models import User
-from ..repositories.general_repository import SQLAlchemyRepository
-from ..schemas.base import BaseSchema
 
 
 class UserRepository(SQLAlchemyRepository[User]):

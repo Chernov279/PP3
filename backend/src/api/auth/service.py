@@ -2,14 +2,16 @@ from datetime import timedelta, timezone, datetime
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.src.models.models import User
+from backend.src.repositories.token_ import TokenRepository
+
 from .exceptions import InvalidTokenException, TokenExpiredException, TokenRevokedException, \
     InvalidCredentialsException, EmailAlreadyExistsException
 from .repository import UserRepository
 from .schemas import AuthRegisterIn, TokensOut, AuthRegisterInternal, RefreshTokenInternal, AuthLoginIn, LogoutOut
 from .security import hash_password, verify_password
 from .utils import create_refresh_token, hash_refresh_token, get_token_expires_at, create_access_token
-from ..models.models import User
-from ..repositories.token_ import TokenRepository
+
 
 class AuthService:
     def __init__(self, session: AsyncSession):

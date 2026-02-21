@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
-from backend.src.config import ACCESS_TOKEN_EXPIRE_MINUTES
+from backend.src.config import settings
 from backend.src.models.models import User
 from backend.src.schemas.base import BaseSchema
 from backend.src.schemas.users import UserOut
@@ -40,7 +40,7 @@ class TokensOut(BaseSchema):
     access_token: str
     refresh_token: str
     token_type: str = TOKEN_TYPE
-    access_expires_in: int = ACCESS_TOKEN_EXPIRE_MINUTES
+    access_expires_in: int = settings.ACCESS_TOKEN_EXPIRE_MINUTES
 
 
 class AccessTokenOut(BaseSchema):

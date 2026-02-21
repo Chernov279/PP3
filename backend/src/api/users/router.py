@@ -1,9 +1,10 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from backend.src.database.connection import get_db_session
 from .service import UserService
 from ..auth.dependencies import get_token_sub_required
 from ..auth.schemas import UserOut, UserUpdateIn
-from ..database.connection import get_db_session
 
 user = APIRouter(prefix="/user", tags=["user"])
 async def get_user_service(
@@ -18,6 +19,14 @@ async def get_user_me(
     user_service: UserService = Depends(get_user_service)
 ):
     return await user_service.get_user(user_id)
+
+
+@user.get("/{user_id}/films")
+async def user_films_history(
+    user_id: int,
+    user_service: UserService = Depends(get_user_service)
+):
+    return await user_service.get_user_films_history(user_id)
 
 
 @user.get("/{user_id}")
@@ -43,10 +52,18 @@ async def delete_user(
 ):
     return await user_service.delete_user(user_id)
 
-@user.post("/kinopoisk_info")
-async def add_kinopoisk_info(
+
+@user.post("/sync_kinopoisk_info")
+async def sync_kinopoisk_watch_history(
         kinopoisk_id: int,
+        debug_user_id: int,
         user_id: int = Depends(get_token_sub_required),
         user_service: UserService = Depends(get_user_service)
 ):
-    return await user_service.add_kinopoisk_info(kinopoisk_id, user_id)
+    """
+    Синхронизирует историю просмотров пользователя с Kinopoisk API.
+    """
+    
+    user = await user_service.sync_kinopoisk_info(kinopoisk_id, user_id or debug_user_id)
+
+    return user

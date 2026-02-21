@@ -4,7 +4,9 @@ from typing import AsyncGenerator
 
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, async_scoped_session, AsyncSession
 
-from backend.src.config import DATABASE_URL
+from backend.src.config import settings
+
+DATABASE_URL = settings.POSTGRES_URL
 
 
 class DatabaseHelper:

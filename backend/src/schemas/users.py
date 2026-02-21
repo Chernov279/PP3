@@ -1,2 +1,2 @@
-from backend.src.auth.schemas import UserBaseSchema
+from backend.src.api.auth.schemas import UserBaseSchema
 

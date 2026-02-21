@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.src.auth.schemas import RefreshTokenInternal
+from backend.src.api.auth.schemas import RefreshTokenInternal
 from backend.src.models.models import RefreshToken
 from backend.src.repositories.general_repository import SQLAlchemyRepository
 
