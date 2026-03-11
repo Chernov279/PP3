@@ -1,19 +1,22 @@
 // src/contexts/AuthContext.tsx
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { User, UserProfile } from '../types/api';
-import { authApi } from '../services/authAPI';
-import { toast } from 'sonner';
+import { UserProfile } from '../types/movie';
+import { authService, getAccessToken, clearTokens, setTokens } from '../services/api';
+import { UserResponse } from '../types/auth';
+
+interface User extends UserResponse {
+  profile?: UserProfile;
+}
 
 interface AuthContextType {
   user: User | null;
-  profile: UserProfile | null;
   isAuthenticated: boolean;
-  isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (name: string, email: string, password: string, confirmPassword: string) => Promise<void>;
-  logout: () => Promise<void>;
-  updateUserProfile: (updates: Partial<UserProfile>) => Promise<void>;
-  refreshUser: () => Promise<void>;
+  login: (email: string, password: string) => Promise<boolean>;
+  register: (email: string, password: string, name: string) => Promise<boolean>;
+  logout: () => void;
+  updateUserProfile: (profile: UserProfile) => Promise<void>;
+  refreshProfile: () => Promise<void>;
+  loading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -30,184 +33,113 @@ interface AuthProviderProps {
   children: ReactNode;
 }
 
+const USER_PROFILE_KEY = "user_profile";
+
+const defaultProfile: UserProfile = {
+  favoriteGenres: [],
+  favoriteActors: [],
+  watchedMovies: [],
+  favoriteMovies: [],
+  imdbConnected: false,
+  kinopoiskConnected: false,
+};
+
+function loadStoredProfile(): UserProfile {
+  try {
+    const raw = localStorage.getItem(USER_PROFILE_KEY);
+    if (!raw) return defaultProfile;
+    return { ...defaultProfile, ...(JSON.parse(raw) as Partial<UserProfile>) };
+  } catch {
+    return defaultProfile;
+  }
+}
+
+function storeProfile(profile: UserProfile) {
+  try {
+    localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(profile));
+  } catch {
+    // ignore
+  }
+}
+
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [profile, setProfile] = useState<UserProfile | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [loading, setLoading] = useState(true);
+
+  const fetchUser = async () => {
+    try {
+      const token = getAccessToken();
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+      
+      // Fetch basic user info
+      // Note: If /users/me fails (e.g. invalid token), interceptor might clear tokens.
+      // We should handle that gracefully.
+      const userData = await authService.getMe();
+      setUser({ ...userData, profile: loadStoredProfile() });
+    } catch (error) {
+      console.error("Auth check failed:", error);
+      clearTokens();
+      setUser(null);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const initAuth = async () => {
-      try {
-        const storedUser = authApi.getStoredUser();
-        
-        if (storedUser && authApi.checkAuth()) {
-          const freshUser = await authApi.getCurrentUser();
-          setUser(freshUser);
-          
-          try {
-            const userProfile = await authApi.getUserProfile();
-            setProfile(userProfile);
-          } catch (profileError) {
-            console.error('Failed to load profile:', profileError);
-            setProfile({
-              id: freshUser.id,
-              user_id: freshUser.id,
-              favorite_genres: [],
-              favorite_actors: [],
-              watched_movies: [],
-              favorite_movies: [],
-              imdb_connected: false,
-              kinopoisk_connected: false,
-              created_at: new Date().toISOString(),
-              updated_at: new Date().toISOString(),
-            });
-          }
-        }
-      } catch (error) {
-        console.error('Auth initialization error:', error);
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        localStorage.removeItem('user');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    initAuth();
+    fetchUser();
   }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<boolean> => {
     try {
-      setIsLoading(true);
-      const response = await authApi.login({ email, password, remember: true });
-      setUser(response.user);
+      const response = await authService.login({ email: email, password });
+      setTokens(response.access_token, response.refresh_token);
+      console.log('Login response:', response);
+      console.log('Access token from response:', response.access_token);
       
-      try {
-        const userProfile = await authApi.getUserProfile();
-        setProfile(userProfile);
-      } catch (profileError) {
-        console.error('Failed to load profile after login:', profileError);
-        setProfile({
-          id: response.user.id,
-          user_id: response.user.id,
-          favorite_genres: [],
-          favorite_actors: [],
-          watched_movies: [],
-          favorite_movies: [],
-          imdb_connected: false,
-          kinopoisk_connected: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        });
-      }
-      
-      toast.success('Вход выполнен успешно!');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Ошибка входа');
-      throw error;
-    } finally {
-      setIsLoading(false);
+      // Fetch user data after successful login
+      await fetchUser();
+      return true;
+    } catch (e) {
+      console.error('Login error:', e);
+      return false;
     }
   };
 
-  const register = async (name: string, email: string, password: string, confirmPassword: string) => {
+  const register = async (email: string, password: string, name: string): Promise<boolean> => {
     try {
-      setIsLoading(true);
-      const response = await authApi.register({ 
-        name, 
-        email, 
-        password, 
-        confirm_password: confirmPassword 
-      });
-      setUser(response.user);
-      
-      try {
-        const userProfile = await authApi.getUserProfile();
-        setProfile(userProfile);
-      } catch (profileError) {
-        console.error('Failed to load profile after registration:', profileError);
-        setProfile({
-          id: response.user.id,
-          user_id: response.user.id,
-          favorite_genres: [],
-          favorite_actors: [],
-          watched_movies: [],
-          favorite_movies: [],
-          imdb_connected: false,
-          kinopoisk_connected: false,
-          created_at: new Date().toISOString(),
-          updated_at: new Date().toISOString(),
-        });
-      }
-      
-      toast.success('Регистрация прошла успешно!');
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : 'Ошибка регистрации');
-      throw error;
-    } finally {
-      setIsLoading(false);
+      const response = await authService.register({ email, password, name });
+      setTokens(response.access_token, response.refresh_token);
+      await fetchUser();
+      return true;
+    } catch (e) {
+      console.error('Registration error:', e);
+      return false;
     }
   };
 
-  const logout = async () => {
-    try {
-      setIsLoading(true);
-      await authApi.logout();
-      setUser(null);
-      setProfile(null);
-      toast.success('Выход выполнен');
-    } catch (error) {
-      console.error('Logout error:', error);
-      setUser(null);
-      setProfile(null);
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('refresh_token');
-      localStorage.removeItem('user');
-    } finally {
-      setIsLoading(false);
-    }
+  const logout = () => {
+    authService.logout();
+    setUser(null);
   };
 
-  const updateUserProfile = async (updates: Partial<UserProfile>) => {
-    if (!profile) {
-      throw new Error('User profile not loaded');
-    }
-
-    try {
-      const updatedProfile = await authApi.updateUserProfile(updates);
-      setProfile(updatedProfile);
-      toast.success('Профиль обновлен');
-    } catch (error) {
-      toast.error('Ошибка обновления профиля');
-      throw error;
-    }
-  };
-
-  const refreshUser = async () => {
-    try {
-      if (authApi.checkAuth() && user) {
-        const freshUser = await authApi.getCurrentUser();
-        setUser(freshUser);
-        
-        const userProfile = await authApi.getUserProfile();
-        setProfile(userProfile);
-      }
-    } catch (error) {
-      console.error('Failed to refresh user:', error);
-      await logout();
-    }
+  const updateUserProfile = async (profile: UserProfile) => {
+    if (!user) return;
+    setUser(prev => (prev ? { ...prev, profile } : null));
+    storeProfile(profile);
   };
 
   const value: AuthContextType = {
     user,
-    profile,
     isAuthenticated: !!user,
-    isLoading,
     login,
     register,
     logout,
     updateUserProfile,
-    refreshUser,
+    refreshProfile: fetchUser,
+    loading
   };
 
   return (

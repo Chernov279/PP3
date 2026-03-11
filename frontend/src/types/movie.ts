@@ -1,9 +1,15 @@
+export interface Genre {
+  id: number;
+  name: string;
+  description?: string;
+}
+
 export interface Movie {
   id: number;
   title: string;
   titleRu?: string;
   year: number;
-  genres: string[];
+  genres: Genre[];
   rating: number;
   popularity: number; // 0-100, где 100 = очень популярный
   description: string;
@@ -13,6 +19,11 @@ export interface Movie {
   imdbRating?: number;
   kinopoiskRating?: number;
   playerUrl: string;
+  // Recommendation scores
+  popularity_score?: number;
+  novelty_score?: number;
+  personalization_score?: number;
+  total_score?: number;
 }
 
 export interface UserProfile {
@@ -22,4 +33,5 @@ export interface UserProfile {
   favoriteMovies: number[];
   imdbConnected: boolean;
   kinopoiskConnected: boolean;
+  kinopoiskUserId?: string;
 }

@@ -1,7 +1,9 @@
-import { Movie } from "../types/api";
+import { Movie } from "../types/movie";
 import { MovieCard } from "./MovieCard";
 import { FilterPanel } from "./FilterPanel";
-import { Loader2 } from "lucide-react";
+import { useAuth } from "../contexts/AuthContext";
+import { Alert, AlertDescription } from "./ui/alert";
+import { Info, Loader2 } from "lucide-react";
 
 interface MovieCatalogProps {
   movies: Movie[];
@@ -12,7 +14,10 @@ interface MovieCatalogProps {
   onMinRatingChange: (value: number[]) => void;
   yearRange: number[];
   onYearRangeChange: (value: number[]) => void;
-  isLoading?: boolean;
+  selectedGenres: string[];
+  onGenresChange: (genres: string[]) => void;
+  allGenres: string[];
+  loading?: boolean;
 }
 
 export function MovieCatalog({ 
@@ -24,16 +29,30 @@ export function MovieCatalog({
   onMinRatingChange,
   yearRange,
   onYearRangeChange,
-  isLoading = false
+  selectedGenres,
+  onGenresChange,
+  allGenres,
+  loading = false,
 }: MovieCatalogProps) {
+  const { isAuthenticated } = useAuth();
+
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-6">
-        <h2 className="text-2xl font-bold">Рекомендации для вас</h2>
+        <h2>Рекомендации для вас</h2>
         <p className="text-muted-foreground">
           Подборка фильмов на основе ваших предпочтений
         </p>
       </div>
+
+      {!isAuthenticated && (
+        <Alert className="mb-6">
+          <Info className="h-4 w-4" />
+          <AlertDescription>
+            Войдите в аккаунт, чтобы получать персонализированные рекомендации на основе ваших любимых жанров и актёров
+          </AlertDescription>
+        </Alert>
+      )}
 
       <FilterPanel
         popularityWeight={popularityWeight}
@@ -42,12 +61,15 @@ export function MovieCatalog({
         onMinRatingChange={onMinRatingChange}
         yearRange={yearRange}
         onYearRangeChange={onYearRangeChange}
+        selectedGenres={selectedGenres}
+        onGenresChange={onGenresChange}
+        allGenres={allGenres}
       />
       
-      {isLoading ? (
-        <div className="flex justify-center items-center py-16">
+      {loading ? (
+        <div className="flex items-center justify-center py-16">
           <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-          <span className="ml-2 text-muted-foreground">Загрузка рекомендаций...</span>
+          <span className="ml-2 text-muted-foreground">Загрузка фильмов...</span>
         </div>
       ) : (
         <>

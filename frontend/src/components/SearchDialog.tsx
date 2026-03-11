@@ -1,71 +1,33 @@
-import { useState, useEffect } from "react";
-import { Search, X } from "lucide-react";
-import { 
-  Dialog, 
-  DialogContent, 
-  DialogHeader, 
-  DialogTitle,
-  DialogDescription
-} from "./ui/dialog";
+import { useState } from "react";
+import { Search, Loader2 } from "lucide-react";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "./ui/dialog";
 import { Input } from "./ui/input";
-import { Movie } from "../types/api";
+import { Movie } from "../types/movie";
 import { MovieCard } from "./MovieCard";
-import { movieApi } from "../services/movieAPI";
+import { useMutation } from "../hooks/useApi";
+import { movieService } from "../services/api";
 
-type SearchDialogProps = {
+interface SearchDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onMovieClick: (movie: Movie) => void;
-};
+}
 
-export function SearchDialog({
-  open,
-  onOpenChange,
-  onMovieClick,
-}: SearchDialogProps) {
+export function SearchDialog({ open, onOpenChange, onMovieClick }: SearchDialogProps) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [filteredMovies, setFilteredMovies] = useState<Movie[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const { data: searchResults, loading, mutate: search } = useMutation(movieService.searchFilms);
 
-  // Дебаунс запроса
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedQuery(searchQuery);
-    }, 500);
+  const handleSearch = (query: string) => {
+    setSearchQuery(query);
+    if (query.trim().length > 2) {
+      search(query.trim());
+    }
+  };
 
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
-
-  // Выполняем поиск
-  useEffect(() => {
-    const performSearch = async () => {
-      if (!debouncedQuery.trim()) {
-        setFilteredMovies([]);
-        return;
-      }
-
-      setIsSearching(true);
-      try {
-        const result = await movieApi.searchMovies({
-          q: debouncedQuery,
-          per_page: 20,
-        });
-        setFilteredMovies(result.items);
-      } catch (error) {
-        console.error('Search error:', error);
-        setFilteredMovies([]);
-      } finally {
-        setIsSearching(false);
-      }
-    };
-
-    performSearch();
-  }, [debouncedQuery]);
-
-  const handleClear = () => {
+  const handleMovieClick = (movie: Movie) => {
+    onMovieClick(movie);
+    onOpenChange(false);
     setSearchQuery("");
-    setFilteredMovies([]);
   };
 
   return (
@@ -73,8 +35,8 @@ export function SearchDialog({
       <DialogContent className="max-w-4xl max-h-[90vh]">
         <DialogHeader>
           <DialogTitle>Поиск фильмов</DialogTitle>
-          <DialogDescription className="text-muted-foreground">
-            Введите название фильма, чтобы увидеть результаты.
+          <DialogDescription>
+            Найдите фильм по названию в нашей базе данных
           </DialogDescription>
         </DialogHeader>
         
@@ -83,44 +45,39 @@ export function SearchDialog({
           <Input
             placeholder="Введите название фильма..."
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10 pr-10"
+            onChange={(e) => handleSearch(e.target.value)}
+            className="pl-10"
+            autoFocus
           />
-          {searchQuery && (
-            <button
-              onClick={handleClear}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
         </div>
         
         <div className="overflow-y-auto max-h-[60vh]">
-          {isSearching ? (
-            <div className="text-center py-8 text-muted-foreground">
-              Поиск...
+          {loading && (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              <span className="ml-2 text-muted-foreground">Поиск...</span>
             </div>
-          ) : searchQuery ? (
+          )}
+
+          {!loading && searchResults && searchResults.length > 0 && (
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-              {filteredMovies.length > 0 ? (
-                filteredMovies.map((movie) => (
-                  <MovieCard
-                    key={movie.id}
-                    movie={movie}
-                    onClick={() => {
-                      onMovieClick(movie);
-                      onOpenChange(false);
-                    }}
-                  />
-                ))
-              ) : (
-                <div className="col-span-full text-center py-8 text-muted-foreground">
-                  Фильмы не найдены
-                </div>
-              )}
+              {searchResults.map((movie) => (
+                <MovieCard
+                  key={movie.id}
+                  movie={movie}
+                  onClick={() => handleMovieClick(movie)}
+                />
+              ))}
             </div>
-          ) : (
+          )}
+
+          {!loading && searchQuery.length > 2 && searchResults && searchResults.length === 0 && (
+            <div className="text-center py-8 text-muted-foreground">
+              Фильмы не найдены по запросу "{searchQuery}"
+            </div>
+          )}
+
+          {!searchQuery && (
             <div className="text-center py-8 text-muted-foreground">
               Начните вводить название фильма
             </div>

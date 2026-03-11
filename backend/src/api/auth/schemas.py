@@ -4,7 +4,7 @@ from typing import Optional
 from backend.src.config import settings
 from backend.src.models.models import User
 from backend.src.schemas.base import BaseSchema
-from backend.src.schemas.users import UserOut
+
 
 TOKEN_TYPE: str = 'Bearer'
 

@@ -1,98 +1,124 @@
-// App.tsx
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { Header } from "./components/Header";
 import { MovieCatalog } from "./components/MovieCatalog";
 import { AccountPage } from "./components/AccountPage";
 import { SearchDialog } from "./components/SearchDialog";
 import { MovieDetailsDialog } from "./components/MovieDetailsDialog";
-import { Movie } from "./types/api";
 import { AuthDialog } from "./components/AuthDialog";
+import { Genre, Movie } from "./types/movie";
 import { useAuth, AuthProvider } from "./contexts/AuthContext";
 import { toast } from "sonner";
-import { movieApi } from "./services/movieAPI";
+import { movieService, userService } from "./services/api";
+import { useApi } from "./hooks/useApi";
+import { Button } from "./components/ui/button";
+import { Film } from "lucide-react";
 
 type View = "catalog" | "account";
 
 function AppContent() {
-  const { user, profile, isAuthenticated, updateUserProfile, logout } = useAuth();
+  const { user, isAuthenticated, updateUserProfile, logout, loading: authLoading } = useAuth();
   const [currentView, setCurrentView] = useState<View>("catalog");
   const [selectedMovie, setSelectedMovie] = useState<Movie | null>(null);
   const [isMovieDialogOpen, setIsMovieDialogOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false);
   
+  // Состояния для фильтров
   const [popularityWeight, setPopularityWeight] = useState<number[]>([50]);
   const [minRating, setMinRating] = useState<number[]>([0]);
   const [yearRange, setYearRange] = useState<number[]>([1900]);
-  
-  const [recommendedMovies, setRecommendedMovies] = useState<Movie[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
 
-  useEffect(() => {
-    loadRecommendations();
-  }, [popularityWeight[0], minRating[0], yearRange[0], isAuthenticated]);
-
-  const loadRecommendations = async () => {
-    try {
-      setIsLoading(true);
-      const movies = await movieApi.getRecommendations({
-        popularity_weight: popularityWeight[0],
-        min_rating: minRating[0],
-        year_from: yearRange[0],
-        limit: 20,
-      });
-      setRecommendedMovies(movies);
-    } catch (error) {
-      console.error('Failed to load recommendations:', error);
-      toast.error('Ошибка загрузки рекомендаций');
-    } finally {
-      setIsLoading(false);
-    }
+  // Получаем профиль пользователя
+  const userProfile = user?.profile || {
+    favoriteGenres: [],
+    favoriteActors: [],
+    watchedMovies: [],
+    favoriteMovies: [],
+    imdbConnected: false,
+    kinopoiskConnected: false,
   };
 
-  const handleMovieClick = async (movie: Movie) => {
-    try {
-      setSelectedMovie(movie);
-      setIsMovieDialogOpen(true);
-      
-      if (isAuthenticated) {
-        await movieApi.markAsWatched(movie.id);
-      }
-    } catch (error) {
-      console.error('Failed to mark as watched:', error);
-      setSelectedMovie(movie);
-      setIsMovieDialogOpen(true);
+  const fetchGenres = useCallback(() => movieService.getAllGenres(), []);
+
+  // Загружаем жанры из API (fetch on mount if authenticated)
+  const { data: apiGenresRaw, loading: genresLoading } = useApi(
+    fetchGenres,
+    { immediate: isAuthenticated }
+  );
+
+  const allGenres: Genre[] = apiGenresRaw || [];
+  const apiGenres = allGenres.map((g) => g.name);
+
+  // Determine if we should fetch recommendations
+  const shouldFetchRecommendations = isAuthenticated && userProfile.kinopoiskConnected;
+
+  const fetchRecommendations = useCallback(() => {
+    const popularityW = Math.min(1, Math.max(0, popularityWeight[0] / 100));
+    const remaining = 1 - popularityW;
+    const noveltyW = remaining / 2;
+    const personalizationW = remaining / 2;
+
+    const selectedGenreIds = selectedGenres
+      .map((name) => allGenres.find((g) => g.name === name)?.id)
+      .filter((id): id is number => typeof id === "number");
+
+    return movieService.getRecommendations({
+      user_id: user?.id,
+      popularity_weight: popularityW,
+      novelty_weight: noveltyW,
+      personalization_weight: personalizationW,
+      year_from: yearRange[0],
+      genre_ids: selectedGenreIds.length ? selectedGenreIds : undefined,
+      limit: 50,
+    });
+  }, [allGenres, selectedGenres, popularityWeight, user?.id, yearRange]);
+
+  const {
+    data: recommendedMovies,
+    loading: moviesLoading,
+    error: moviesError,
+    refetch: refetchMovies,
+  } = useApi(
+    fetchRecommendations,
+    { immediate: shouldFetchRecommendations }
+  );
+
+  // Re-fetch recommendations explicitly when dependencies change
+  // We use this because `useApi` is now strict and only auto-fetches once
+  // to 100% avoid infinite loops.
+  useEffect(() => {
+    if (shouldFetchRecommendations) {
+      refetchMovies();
     }
+  }, [fetchRecommendations, shouldFetchRecommendations, refetchMovies]);
+
+  const handleMovieClick = (movie: Movie) => {
+    setSelectedMovie(movie);
+    setIsMovieDialogOpen(true);
   };
 
   const handleToggleFavorite = async () => {
-    if (!selectedMovie) return;
+    if (!selectedMovie || !isAuthenticated || !user?.id) {
+        toast.error("Пожалуйста, войдите в систему");
+        return;
+    }
 
+    const isFavorite = userProfile.favoriteMovies.includes(selectedMovie.id);
+    
     try {
-      const result = await movieApi.toggleFavorite(selectedMovie.id);
-      
-      if (profile) {
-        const isCurrentlyFavorite = profile.favorite_movies.includes(selectedMovie.id);
-        const updatedFavorites = isCurrentlyFavorite
-          ? profile.favorite_movies.filter(id => id !== selectedMovie.id)
-          : [...profile.favorite_movies, selectedMovie.id];
+        await userService.toggleFavorite("me", selectedMovie.id, isFavorite ? "remove" : "add");
         
-        await updateUserProfile({
-          favorite_movies: updatedFavorites,
-        });
-      }
-      
-      setRecommendedMovies(prev =>
-        prev.map(movie =>
-          movie.id === selectedMovie.id
-            ? { ...movie, is_favorite: result.is_favorite }
-            : movie
-        )
-      );
-      
-      toast.success(result.is_favorite ? 'Добавлено в избранное' : 'Удалено из избранного');
-    } catch (error) {
-      toast.error('Ошибка обновления избранного');
+        const newFavorites = isFavorite
+            ? userProfile.favoriteMovies.filter(id => id !== selectedMovie.id)
+            : [...userProfile.favoriteMovies, selectedMovie.id];
+            
+        updateUserProfile({ ...userProfile, favoriteMovies: newFavorites });
+        
+        toast.success(isFavorite ? "Удалено из избранного" : "Добавлено в избранное");
+    } catch (e) {
+        toast.error("Не удалось обновить избранное");
+        console.error(e);
     }
   };
 
@@ -104,15 +130,25 @@ function AppContent() {
     }
   };
 
-  const handleLogout = async () => {
-    await logout();
+  const handleLogout = () => {
+    logout();
+    toast.success("Вы вышли из аккаунта");
     setCurrentView("catalog");
-    loadRecommendations();
   };
 
-  const isFavorite = selectedMovie && profile
-    ? profile.favorite_movies.includes(selectedMovie.id)
+  const isFavorite = selectedMovie
+    ? (userProfile.favoriteMovies || []).includes(selectedMovie.id)
     : false;
+
+  useEffect(() => {
+    if (moviesError && shouldFetchRecommendations) {
+      toast.error(`Ошибка загрузки фильмов: ${moviesError}`);
+    }
+  }, [moviesError, shouldFetchRecommendations]);
+
+  if (authLoading) {
+    return <div className="min-h-screen bg-background flex items-center justify-center">Загрузка...</div>;
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -126,27 +162,66 @@ function AppContent() {
         onLogout={handleLogout}
       />
 
-      {currentView === "catalog" && (
-        <MovieCatalog
-          movies={recommendedMovies}
-          onMovieClick={handleMovieClick}
-          popularityWeight={popularityWeight}
-          onPopularityWeightChange={setPopularityWeight}
-          minRating={minRating}
-          onMinRatingChange={setMinRating}
-          yearRange={yearRange}
-          onYearRangeChange={setYearRange}
-          isLoading={isLoading}
-        />
-      )}
+      {!isAuthenticated ? (
+        <div className="container mx-auto px-4 py-20 flex flex-col items-center text-center space-y-8">
+          <div className="p-6 bg-primary/10 rounded-full">
+            <Film className="w-16 h-16 text-primary" />
+          </div>
+          <h1 className="text-4xl md:text-6xl font-bold tracking-tight">
+            Добро пожаловать в КиноРек
+          </h1>
+          <p className="text-xl text-muted-foreground max-w-2xl">
+            Ваш персональный сервис рекомендаций фильмов. Мы анализируем ваши предпочтения, 
+            чтобы предложить именно то, что вам понравится.
+          </p>
+          <div className="flex gap-4">
+            <Button size="lg" onClick={() => setIsAuthDialogOpen(true)}>
+              Войти / Регистрация
+            </Button>
+          </div>
+        </div>
+      ) : (
+        <>
+          {currentView === "catalog" && (
+            <>
+              {!userProfile.kinopoiskConnected ? (
+                <div className="container mx-auto px-4 py-20 flex flex-col items-center text-center space-y-6">
+                  <h2 className="text-2xl font-semibold">Подключите Кинопоиск</h2>
+                  <p className="text-muted-foreground max-w-md">
+                    Для получения персональных рекомендаций необходимо синхронизировать историю просмотров с Кинопоиска.
+                  </p>
+                  <Button onClick={() => setCurrentView("account")}>
+                    Перейти в профиль
+                  </Button>
+                </div>
+              ) : (
+                <MovieCatalog
+                  movies={recommendedMovies || []}
+                  onMovieClick={handleMovieClick}
+                  popularityWeight={popularityWeight}
+                  onPopularityWeightChange={setPopularityWeight}
+                  minRating={minRating}
+                  onMinRatingChange={setMinRating}
+                  yearRange={yearRange}
+                  onYearRangeChange={setYearRange}
+                  selectedGenres={selectedGenres}
+                  onGenresChange={setSelectedGenres}
+                  allGenres={apiGenres}
+                  loading={moviesLoading}
+                />
+              )}
+            </>
+          )}
 
-      {currentView === "account" && profile && (
-        <AccountPage
-          profile={profile}
-          onUpdateProfile={updateUserProfile}
-          onMovieClick={handleMovieClick}
-          onBack={() => setCurrentView("catalog")}
-        />
+          {currentView === "account" && (
+            <AccountPage
+              profile={userProfile}
+              onUpdateProfile={updateUserProfile}
+              onMovieClick={handleMovieClick}
+              onBack={() => setCurrentView("catalog")}
+            />
+          )}
+        </>
       )}
 
       <SearchDialog

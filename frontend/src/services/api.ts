@@ -1,69 +1,313 @@
-// src/services/api.ts
-import axios from 'axios';
+import { Genre, Movie } from "../types/movie";
+import { LoginRequest, RegisterRequest, TokenResponse, UserResponse } from "../types/auth";
 
-const API_URL = (import.meta as any).env?.VITE_API_URL || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
 
-export const api = axios.create({
-  baseURL: API_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
+type BackendGenre = { id: number; name: string };
+type BackendRecommendedFilm = {
+  id: number;
+  title: string;
+  original_title?: string | null;
+  poster_url?: string | null;
+  kp_rating?: number | null;
+  imdb_rating?: number | null;
+  year?: number | null;
+  genres?: BackendGenre[];
+  popularity_score: number;
+  novelty_score: number;
+  personalization_score?: number | null;
+  total_score: number;
+};
 
-// Интерцептор для добавления токена
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('access_token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+type BackendWatchHistoryItem = {
+  watch_history: {
+    id: number;
+    user_id: number;
+    movie_id: number;
+    watched_at?: string | null;
+    watch_duration?: number | null;
+    rating?: number | null;
+  };
+  movie: {
+    id: number;
+    title: string;
+    original_title?: string | null;
+    poster_url?: string | null;
+    kp_rating?: number | null;
+    imdb_rating?: number | null;
+    description?: string | null;
+    release_date?: string | null;
+    duration?: number | null;
+    vote_count?: number | null;
+  };
+};
 
-// Интерцептор для обработки ошибок и обновления токена
-api.interceptors.response.use(
-  (response) => response,
-  async (error) => {
-    const originalRequest = error.config;
-    
-    // Если ошибка 401 и это не запрос на обновление токена
-    if (error.response?.status === 401 && !originalRequest._retry) {
-      originalRequest._retry = true;
-      
+type BackendFilm = {
+  id: number;
+  title: string;
+  original_title?: string | null;
+  poster_url?: string | null;
+  kp_rating?: number | null;
+  imdb_rating?: number | null;
+  release_date?: string | null;
+  description?: string | null;
+  popularity?: number | null;
+};
+
+function normalizeMovieFromRecommendation(m: BackendRecommendedFilm): Movie {
+  return {
+    id: m.id,
+    title: m.title,
+    year: m.year ?? 0,
+    genres: (m.genres || []).map((g) => ({ id: g.id, name: g.name })),
+    rating: Number(m.kp_rating ?? m.imdb_rating ?? 0),
+    popularity: 0,
+    description: "",
+    poster: m.poster_url || "",
+    actors: [],
+    director: "",
+    playerUrl: "",
+    imdbRating: m.imdb_rating ?? undefined,
+    kinopoiskRating: m.kp_rating ?? undefined,
+    popularity_score: m.popularity_score,
+    novelty_score: m.novelty_score,
+    personalization_score: m.personalization_score ?? undefined,
+    total_score: m.total_score,
+  };
+}
+
+function normalizeMovieFromWatchHistory(item: BackendWatchHistoryItem): Movie {
+  const m = item.movie;
+  const year =
+    typeof m.release_date === "string" && m.release_date.length >= 4
+      ? Number(m.release_date.slice(0, 4))
+      : 0;
+  return {
+    id: m.id,
+    title: m.title,
+    year,
+    genres: [],
+    rating: Number(m.kp_rating ?? m.imdb_rating ?? item.watch_history.rating ?? 0),
+    popularity: 0,
+    description: m.description || "",
+    poster: m.poster_url || "",
+    actors: [],
+    director: "",
+    playerUrl: "",
+    imdbRating: m.imdb_rating ?? undefined,
+    kinopoiskRating: m.kp_rating ?? undefined,
+  };
+}
+
+function normalizeMovieFromFilm(f: BackendFilm): Movie {
+  const year =
+    typeof f.release_date === "string" && f.release_date.length >= 4
+      ? Number(f.release_date.slice(0, 4))
+      : 0;
+  return {
+    id: f.id,
+    title: f.title,
+    year,
+    genres: [],
+    rating: Number(f.kp_rating ?? f.imdb_rating ?? 0),
+    popularity: Number(f.popularity ?? 0),
+    description: f.description || "",
+    poster: f.poster_url || "",
+    actors: [],
+    director: "",
+    playerUrl: "",
+    imdbRating: f.imdb_rating ?? undefined,
+    kinopoiskRating: f.kp_rating ?? undefined,
+  };
+}
+
+// --- Token Management ---
+const ACCESS_TOKEN_KEY = "access_token";
+const REFRESH_TOKEN_KEY = "refresh_token";
+
+export const getAccessToken = () => localStorage.getItem(ACCESS_TOKEN_KEY);
+export const getRefreshToken = () => localStorage.getItem(REFRESH_TOKEN_KEY);
+export const setTokens = (access: string, refresh: string) => {
+  localStorage.setItem(ACCESS_TOKEN_KEY, access);
+  localStorage.setItem(REFRESH_TOKEN_KEY, refresh);
+};
+export const clearTokens = () => {
+  localStorage.removeItem(ACCESS_TOKEN_KEY);
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
+};
+
+// --- API Client ---
+
+interface ApiError {
+  detail: string | { msg: string }[];
+}
+
+async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const url = `${API_BASE_URL}${endpoint}`;
+  const token = getAccessToken();
+
+  const headers = {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...options.headers,
+  };
+
+  let response = await fetch(url, { ...options, headers });
+
+  if (response.status === 401) {
+    const refreshToken = getRefreshToken();
+    if (refreshToken) {
       try {
-        const refreshToken = localStorage.getItem('refresh_token');
-        const response = await axios.post(`${API_URL}/auth/refresh`, {
-          refresh_token: refreshToken,
+        const refreshResponse = await fetch(`${API_BASE_URL}/auth/refresh`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ refresh_token: refreshToken }),
         });
-        
-        const { access_token } = response.data.data;
-        localStorage.setItem('access_token', access_token);
-        
-        originalRequest.headers.Authorization = `Bearer ${access_token}`;
-        return api(originalRequest);
-      } catch (refreshError) {
-        // Очищаем localStorage и перенаправляем на логин
-        localStorage.removeItem('access_token');
-        localStorage.removeItem('refresh_token');
-        localStorage.removeItem('user');
-        window.location.href = '/';
-        return Promise.reject(refreshError);
+
+        if (refreshResponse.ok) {
+          const data: TokenResponse = await refreshResponse.json();
+          setTokens(data.access_token, data.refresh_token);
+          headers["Authorization"] = `Bearer ${data.access_token}`;
+          response = await fetch(url, { ...options, headers });
+        } else {
+          clearTokens();
+          window.location.href = "/";
+          throw new Error("Session expired. Please login again.");
+        }
+      } catch (error) {
+        clearTokens();
+        throw error;
       }
     }
-    
-    return Promise.reject(error);
   }
-);
 
-// Вспомогательные функции
-export const handleApiError = (error: any): string => {
-  if (error.response?.data?.detail) {
-    return error.response.data.detail;
+  if (!response.ok) {
+    const errorData: ApiError = await response.json().catch(() => ({ detail: "Unknown error" }));
+    const errorMessage = typeof errorData.detail === 'string' 
+      ? errorData.detail 
+      : JSON.stringify(errorData.detail);
+    throw new Error(errorMessage || `HTTP ${response.status}`);
   }
-  if (error.response?.data?.message) {
-    return error.response.data.message;
+
+  if (response.status === 204) {
+    return {} as T;
   }
-  if (error.message) {
-    return error.message;
+
+  return response.json();
+}
+
+// --- Auth Endpoints ---
+export const authService = {
+  async login(data: LoginRequest): Promise<TokenResponse> {
+    return apiRequest<TokenResponse>("/auth/login", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async register(data: RegisterRequest): Promise<TokenResponse> {
+    return apiRequest<TokenResponse>("/auth/register", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async getMe(): Promise<UserResponse> {
+    return apiRequest<UserResponse>("/user/me");
+  },
+
+  logout() {
+    clearTokens();
   }
-  return 'Произошла неизвестная ошибка';
+};
+
+// --- Movie Endpoints ---
+export const movieService = {
+  async getRecommendations(params: any = {}): Promise<Movie[]> {
+    const query = new URLSearchParams();
+    if (params.user_id != null) query.append("user_id", String(params.user_id));
+    if (params.popularity_weight !== undefined) query.append("popularity_weight", String(params.popularity_weight));
+    if (params.novelty_weight !== undefined) query.append("novelty_weight", String(params.novelty_weight));
+    if (params.personalization_weight !== undefined) query.append("personalization_weight", String(params.personalization_weight));
+    if (params.genre_ids?.length) {
+      for (const id of params.genre_ids) query.append("genre_ids", String(id));
+    }
+    if (params.exclude_genre_ids?.length) {
+      for (const id of params.exclude_genre_ids) query.append("exclude_genre_ids", String(id));
+    }
+    if (params.year_from !== undefined) query.append("year_from", String(params.year_from));
+    if (params.year_to !== undefined) query.append("year_to", String(params.year_to));
+    if (params.limit !== undefined) query.append("limit", String(params.limit));
+
+    const raw = await apiRequest<BackendRecommendedFilm[]>(`/recommendations/?${query.toString()}`);
+    return raw.map(normalizeMovieFromRecommendation);
+  },
+
+  async getSimilarFilms(filmId: number): Promise<Movie[]> {
+    const raw = await apiRequest<BackendFilm[]>(`/films/${filmId}/similars`);
+    return raw.map(normalizeMovieFromFilm);
+  },
+
+  async getAllGenres(): Promise<Genre[]> {
+    return apiRequest<Genre[]>("/films/all-genres");
+  },
+
+  async syncKinopoiskWatchHistory(kinopoiskId: number): Promise<any> {
+    const me = await authService.getMe();
+    const query = new URLSearchParams({
+      kinopoisk_id: String(kinopoiskId),
+      debug_user_id: String(me.id),
+    });
+    return apiRequest(`/user/sync_kinopoisk_info?${query.toString()}`, { method: "POST" });
+  },
+  
+  async getFilmDetails(filmId: number): Promise<Movie> {
+    const raw = await apiRequest<BackendFilm>(`/films/${filmId}`);
+    return normalizeMovieFromFilm(raw);
+  },
+
+  async getFilmGenres(filmId: number): Promise<Genre[]> {
+    return apiRequest<Genre[]>(`/films/${filmId}/genres`);
+  },
+
+  async searchFilms(query: string): Promise<Movie[]> {
+    // В предоставленном списке эндпоинтов нет поиска. Мокаем пустой ответ, чтобы не вызывать ошибку 404
+    return [];
+  }
+};
+
+export const userService = {
+  async getUser(userId: string | number = "me"): Promise<UserResponse> {
+    const id = String(userId);
+    const endpoint = id === "me" ? "/user/me" : `/user/${id}`;
+    return apiRequest<UserResponse>(endpoint);
+  },
+
+  async updateUser(data: { name: string; email: string }): Promise<UserResponse> {
+    return apiRequest<UserResponse>(`/user/`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  },
+  
+  async getFavorites(userId: string = "me"): Promise<Movie[]> {
+    // Эндпоинта избранного нет в списке, мокаем
+    return [];
+  },
+
+  async toggleFavorite(userId: string = "me", filmId: number, action: "add" | "remove"): Promise<{ success: boolean }> {
+    // Эндпоинта избранного нет в списке, мокаем
+    return { success: true };
+  },
+  
+  async getWatched(userId: string = "me"): Promise<Movie[]> {
+    // Если userId = "me", нам возможно нужно получить id из контекста.
+    // Но бэкенд может принимать и "me", либо мы просто передаем id. 
+    // Предполагаем, что бэкенд ожидает реальный user_id, так как в роуте `/users/{user_id}/films`
+    // Будем подставлять userId
+    const raw = await apiRequest<BackendWatchHistoryItem[]>(`/user/${userId}/films`);
+    return raw.map(normalizeMovieFromWatchHistory);
+  }
 };
