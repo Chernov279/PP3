@@ -1,3 +1,4 @@
+from token import OP
 from typing import List, Any, Optional
 
 from sqlalchemy import Column, Integer, String, DateTime, Text, Date, JSON, Float, Boolean, ForeignKey, func
@@ -92,22 +93,38 @@ class MovieGenre(DeclarativeBaseModel):
     genre_id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
 
+
 class Actor(DeclarativeBaseModel):
     __tablename__ = "actors"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
 
-    first_name: Mapped[str] = mapped_column(String)
-    last_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    # Основные имена
+    name_ru: Mapped[str] = mapped_column(String)         
+    name_en: Mapped[Optional[str]] = mapped_column(String, nullable=True)  
 
-    birth_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
-    death_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    # Даты и места
+    birth_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True) 
+    death_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)  
+    birthplace: Mapped[Optional[str]] = mapped_column(String, nullable=True)  
+    deathplace: Mapped[Optional[str]] = mapped_column(String, nullable=True)  
 
-    country: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    biography: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Внешность и популярность
+    growth: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)    
+    poster_url: Mapped[Optional[str]] = mapped_column(String, nullable=True)  
+    popularity: Mapped[Optional[float]] = mapped_column(Float, nullable=True) 
+    average_rating: Mapped[Optional[float]] = mapped_column(Float, nullable=True) 
 
-    popularity: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
-    average_rating: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    # Профессия и биография
+    profession: Mapped[Optional[str]] = mapped_column(String, nullable=True) 
+    biography: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  
+
+    # Дополнительные данные в JSON
+    facts: Mapped[Optional[List[str]]] = mapped_column(JSON, nullable=True)  
+    films: Mapped[Optional[List[dict]]] = mapped_column(JSON, nullable=True)  
+
+    # Страна (можно выделить из birthplace или добавить отдельно)
+    country: Mapped[Optional[str]] = mapped_column(String, nullable=True)      
 
 class MovieActor(DeclarativeBaseModel):
     __tablename__ = "movie_actors"
@@ -194,8 +211,8 @@ class WatchHistory(DeclarativeBaseModel):
     user_id: Mapped[int] = mapped_column(Integer, index=True)
     movie_id: Mapped[int] = mapped_column(Integer, index=True)
 
-    watched_at: Mapped[datetime] = mapped_column(
-        DateTime, server_default=func.now()
+    watched_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime, server_default=func.now(), nullable=True
     )
 
     watch_duration: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)

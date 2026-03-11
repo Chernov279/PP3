@@ -226,13 +226,6 @@ async def save_user_reactions_to_db(
                 )
                 session.add(watch_history)
 
-            # Обработка реакций
-            for reaction in item.get("reactions", []):
-                typename = reaction["__typename"]
-                if typename == "Watched" and reaction.get("watched"):
-                    watch_history.watched_at = reaction["watched"]
-                elif typename == "Vote" and "value" in reaction:
-                    watch_history.rating = reaction["value"]
 
         # Сохраняем изменения после каждого фильма (можно и после всех)
         await session.commit()

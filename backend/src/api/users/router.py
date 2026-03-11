@@ -6,7 +6,7 @@ from .service import UserService
 from ..auth.dependencies import get_token_sub_required
 from ..auth.schemas import UserOut, UserUpdateIn
 
-user = APIRouter(prefix="/user", tags=["user"])
+user = APIRouter(prefix="/users", tags=["user"])
 async def get_user_service(
     session: AsyncSession = Depends(get_db_session),
 ) -> UserService:
@@ -56,7 +56,6 @@ async def delete_user(
 @user.post("/sync_kinopoisk_info")
 async def sync_kinopoisk_watch_history(
         kinopoisk_id: int,
-        debug_user_id: int,
         user_id: int = Depends(get_token_sub_required),
         user_service: UserService = Depends(get_user_service)
 ):
@@ -64,6 +63,6 @@ async def sync_kinopoisk_watch_history(
     Синхронизирует историю просмотров пользователя с Kinopoisk API.
     """
     
-    user = await user_service.sync_kinopoisk_info(kinopoisk_id, user_id or debug_user_id)
+    user = await user_service.sync_kinopoisk_info(kinopoisk_id, user_id)
 
     return user

@@ -99,7 +99,12 @@ class UserRepository(SQLAlchemyRepository[User]):
         """
         return await self.exists(User.email == email)
 
-
+    async def exists_user_with_name(
+            self,
+            name: str,
+    ) -> bool:
+        return await self.exists(User.name == name)
+    
     async def get_all_users(
             self,
             limit: int = 100,

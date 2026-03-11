@@ -1,9 +1,11 @@
+from tkinter import N
+
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.src.api.films.repository import MovieRepository
 from backend.src.models.models import Genre, MovieGenre
-from backend.src.parser import fetch_similar_films, fetch_film_data
+from backend.src.parser import fetch_search_films, fetch_similar_films, fetch_film_data
 class FilmService:
 
     def __init__(self, db_session: AsyncSession):
@@ -17,6 +19,14 @@ class FilmService:
             await self._repo.save(film)
         return film
     
+    async def search_film(self, q: str | None = None, page: int = 1):
+        if q is None:
+            return []
+        films = await fetch_search_films(q, page)
+        return films
+
+
+
     async def get_film_similars(self, film_id: int):
         film = await self._repo.get_similars(film_id)
         if not film: 

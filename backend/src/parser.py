@@ -40,3 +40,35 @@ async def fetch_similar_films(
     url = f"https://kinopoiskapiunofficial.tech/api/v2.2/films/{film_id}/similars"
     data = await fetch_data(url)
     return data.get("items", [])
+
+async def fetch_search_films(
+    q: str,
+    page: int = 1
+) -> List[Dict[str, Any]]:
+    """
+    Получает список похожих фильмов для указанного film_id через API Кинопоиска.
+    Возвращает список элементов items.
+    """
+    url = f"https://kinopoiskapiunofficial.tech/api/v2.1/films/search-by-keyword?keyword={q}&page={page}"
+    data = await fetch_data(url)
+    return data.get("films", [])
+
+async def fetch_search_persons(
+    q: str,
+    page: int = 1
+) -> List[Dict[str, Any]]:
+    """
+    """
+    url = f"https://kinopoiskapiunofficial.tech/api/v1/persons?name={q}&page={page}"
+    data = await fetch_data(url)
+    return data.get("items", [])
+
+
+async def fetch_person_by_id(
+    id: int
+) -> Dict[str, Any]:
+    """
+    """
+    url = f"https://kinopoiskapiunofficial.tech/api/v1/staff/{id}"
+    data = await fetch_data(url)
+    return data

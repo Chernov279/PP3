@@ -1,6 +1,7 @@
 import asyncio
 import logging
 
+from backend.src.middlewares import DebugMiddleware
 import uvicorn
 
 from fastapi import FastAPI
@@ -10,8 +11,10 @@ from backend.src.api.recommendation.router import recommendations
 from backend.src.api.films.router import films
 from backend.src.api.auth.router import auth
 from backend.src.api.users.router import user
+from backend.src.api.persons.router import persons
+from backend.src.api.genres.router import genres
 
-routers = [auth, user, films, recommendations]
+routers = [auth, user, films, recommendations, persons, genres]
 
 
 # configure_logging(level="INFO")
@@ -28,11 +31,14 @@ def get_application() -> FastAPI:
 
     application.add_middleware(
         CORSMiddleware,
-        allow_origins=["*"],
+        allow_origins=["http://localhost:3000", "http://192.168.196.138:3000"],
+        
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
     )
+    application.add_middleware(DebugMiddleware)
+    
     return application
 
 
@@ -51,7 +57,7 @@ async def shutdown_event():
 if __name__ == "__main__":
         uvicorn.run(
         "backend.src.main:app",
-        host="0.0.0.0",
+        host="192.168.196.88",
         port=8000,
-        reload=True
+        reload=False
     )
