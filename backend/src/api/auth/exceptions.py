@@ -18,6 +18,10 @@ class EmailAlreadyExistsException(AppException):
     def __init__(self):
         super().__init__(status_code=409, detail="User with this email already exists")
 
+class NameAlreadyExistsException(AppException):
+    """Исключение для уже зарегистрированного name."""
+    def __init__(self):
+        super().__init__(status_code=409, detail="User with this name already exists")
 
 class InvalidUsernameException(AppException):
     """Исключение для невалидного имени пользователя."""

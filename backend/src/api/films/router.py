@@ -18,13 +18,14 @@ async def get_all_genres(
 ):
     return await service.get_all_genres()
 
-@films.get("/{film_id}")
-async def get_film(
-    film_id: int = 725190,
-    user_id: int = Depends(get_token_sub_required),
+
+@films.get("/search")
+async def search_film(
+    q: str | None = None,
+    page: int = 1,
     service: FilmService = Depends(get_film_service)
 ):
-    return await service.get_film(film_id)
+    return await service.search_film(q, page)
 
 @films.get("/{film_id}/genres")
 async def get_film_genres(

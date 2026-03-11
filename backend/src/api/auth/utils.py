@@ -6,6 +6,7 @@ from typing import Optional, Union
 import jwt
 from fastapi import HTTPException
 
+
 from backend.src.config import settings
 
 REFRESH_TOKEN_EXPIRE_DAYS = 30

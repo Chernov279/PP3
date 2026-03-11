@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.src.models.models import User
 from backend.src.repositories.token_ import TokenRepository
 
-from .exceptions import InvalidTokenException, TokenExpiredException, TokenRevokedException, \
+from .exceptions import InvalidTokenException, NameAlreadyExistsException, TokenExpiredException, TokenRevokedException, \
     InvalidCredentialsException, EmailAlreadyExistsException
 from .repository import UserRepository
 from .schemas import AuthRegisterIn, TokensOut, AuthRegisterInternal, RefreshTokenInternal, AuthLoginIn, LogoutOut
@@ -26,7 +26,8 @@ class AuthService:
 
         if await self._user_repo.exists_user_with_email(user_in.email):
             raise EmailAlreadyExistsException()
-
+        if await self._user_repo.exists_user_with_name(user_in.name):
+            raise NameAlreadyExistsException()
         hashed_password = hash_password(user_in.password)
         auth_internal = AuthRegisterInternal(
             email=user_in.email,
@@ -82,6 +83,7 @@ class AuthService:
         await self._session.commit()
 
         return TokensOut(
+            user_id=user.id,
             access_token=access_token,
             refresh_token=refresh_token,
         )
