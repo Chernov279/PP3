@@ -27,6 +27,32 @@ async def search_film(
 ):
     return await service.search_film(q, page)
 
+@films.get("/favorite")
+async def get_favorite_movies(
+    user_id: int = Depends(get_token_sub_required),
+    movie_service: FilmService = Depends(get_film_service),
+):
+    """Получить список избранных фильмов текущего пользователя."""
+    return await movie_service.get_favorite_movies(user_id)
+
+@films.post("/favorite/{movie_id}")
+async def add_movie_to_favorites(
+    movie_id: int,
+    user_id: int = Depends(get_token_sub_required),
+    movie_service: FilmService = Depends(get_film_service),
+):
+    """Добавить фильм в избранное."""
+    return await movie_service.add_to_favorites(movie_id, user_id)
+
+@films.delete("/favorite/{movie_id}")
+async def remove_movie_from_favorites(
+    movie_id: int,
+    user_id: int = Depends(get_token_sub_required),
+    movie_service: FilmService = Depends(get_film_service),
+):
+    """Удалить фильм из избранного."""
+    return await movie_service.remove_from_favorites(movie_id, user_id)
+
 @films.get("/{film_id}/genres")
 async def get_film_genres(
     film_id: int = 725190,

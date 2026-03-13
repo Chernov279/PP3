@@ -1,17 +1,21 @@
-import asyncio
-from datetime import date, datetime
-from turtle import title
 from typing import List, Dict, Optional
-from venv import create
 
 import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.src.api.auth.schemas import UserOut
 from backend.src.api.fetch_films.service import update_all_movies_details
-from backend.src.models.models import Movie, Genre, MovieGenre, Review, WatchHistory
+from backend.src.models.models import Movie, Genre, MovieGenre, Review, User, WatchHistory
 
-
+def map_user_out(user_out: UserOut) -> dict:
+    result = user_out.model_dump()
+    
+    if "created_at" in result and result["created_at"]:
+        # Преобразуем datetime в строку формата DD.MM.YYYY
+        result["created_at"] = result["created_at"].strftime("%d.%m.%y")
+    
+    return result
 def _to_float_or_none(value) -> Optional[float]:
     if value is None:
         return None
@@ -211,21 +215,18 @@ async def save_user_reactions_to_db(
                 session.add(MovieGenre(movie_id=kp_id, genre_id=genre_id))
 
         # 4. Обработка реакций
-        for reaction in item.get("reactions", []):
-            stmt_wh = select(WatchHistory).where(
-                WatchHistory.user_id == local_user_id,
-                WatchHistory.movie_id == kp_id
+        stmt_wh = select(WatchHistory).where(
+            WatchHistory.user_id == local_user_id,
+            WatchHistory.movie_id == kp_id
+        )
+        result_wh = await session.execute(stmt_wh)
+        watch_history = result_wh.scalar_one_or_none()
+        if watch_history is None:
+            watch_history = WatchHistory(
+                user_id=local_user_id,
+                movie_id=kp_id
             )
-            result_wh = await session.execute(stmt_wh)
-            watch_history = result_wh.scalar_one_or_none()
-
-            if watch_history is None:
-                watch_history = WatchHistory(
-                    user_id=local_user_id,
-                    movie_id=kp_id
-                )
-                session.add(watch_history)
-
+            session.add(watch_history)
 
         # Сохраняем изменения после каждого фильма (можно и после всех)
         await session.commit()

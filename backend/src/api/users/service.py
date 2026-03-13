@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from starlette.responses import JSONResponse
 
 from backend.src.api.users.parser import fetch_user_reactions
+from backend.src.models.models import User
 
 from .env import cookies
 from .helpers import save_user_reactions_to_db, sync_user_votes, fetch_user_votes
@@ -52,4 +53,6 @@ class UserService:
         items = await fetch_user_reactions(user_kinopoisk_id, cookies)
 
         await save_user_reactions_to_db(self._db_session, items, user_id)
+        await self._user_repo.update(User.id == user_id, values={"is_kinopoisk_synchronized": True})
+        await self._db_session.commit()
         return JSONResponse(status_code=200, content={"message": "User info synced successfully"})

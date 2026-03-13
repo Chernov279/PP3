@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.src.api.users.helpers import map_user_out
 from backend.src.database.connection import get_db_session
 from .service import UserService
 from ..auth.dependencies import get_token_sub_required
@@ -18,7 +19,8 @@ async def get_user_me(
     user_id: int = Depends(get_token_sub_required),
     user_service: UserService = Depends(get_user_service)
 ):
-    return await user_service.get_user(user_id)
+    user = await user_service.get_user(user_id)
+    return map_user_out(user)
 
 
 @user.get("/{user_id}/films")

@@ -5,7 +5,6 @@ from backend.src.config import settings
 from backend.src.models.models import User
 from backend.src.schemas.base import BaseSchema
 
-
 TOKEN_TYPE: str = 'Bearer'
 
 class UserBaseSchema(BaseSchema):
@@ -62,6 +61,7 @@ class UserOut(UserBaseSchema):
     id: int
     email: str
     name: str
+    is_kinopoisk_synchronized: bool
 
     class Config:
         from_attributes = True

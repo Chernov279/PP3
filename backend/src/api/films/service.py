@@ -1,10 +1,11 @@
 from tkinter import N
 
-from sqlalchemy import select
+from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.src.api.films.repository import MovieRepository
-from backend.src.models.models import Genre, MovieGenre
+from backend.src.models.favorite_movies import FavoriteMovies
+from backend.src.models.models import Genre, Movie, MovieGenre
 from backend.src.parser import fetch_search_films, fetch_similar_films, fetch_film_data
 class FilmService:
 
@@ -44,3 +45,35 @@ class FilmService:
         query = select(Genre)
         genres = await self._db_session.execute(query)
         return genres.scalars().all()
+    
+    async def get_favorite_movies(self, user_id: int):
+        """Возвращает список фильмов, добавленных пользователем в избранное."""
+        query = select(Movie).join(FavoriteMovies, Movie.id == FavoriteMovies.movie_id).where(user_id == FavoriteMovies.user_id)
+        result = await self._db_session.execute(query)
+        return result.scalars().all()
+
+    async def add_to_favorites(self, movie_id: int, user_id: int) -> dict:
+        """Добавляет фильм в избранное пользователя."""
+        stmt = select(FavoriteMovies).where(
+            FavoriteMovies.user_id == user_id,
+            FavoriteMovies.movie_id == movie_id
+        )
+        existing = await self._db_session.execute(stmt)
+        if existing.scalar_one_or_none() is None:
+            stmt = select(Movie).where(
+                FavoriteMovies.movie_id == movie_id
+            )
+            fav = FavoriteMovies(user_id=user_id, movie_id=movie_id)
+            self._db_session.add(fav)
+            await self._db_session.commit()
+        return {"detail": "Movie added to favorites"}
+
+    async def remove_from_favorites(self, movie_id: int, user_id: int) -> dict:
+        """Удаляет фильм из избранного."""
+        stmt = delete(FavoriteMovies).where(
+            FavoriteMovies.user_id == user_id,
+            FavoriteMovies.movie_id == movie_id
+        )
+        await self._db_session.execute(stmt)
+        await self._db_session.commit()
+        return {"detail": "Movie removed from favorites"}
