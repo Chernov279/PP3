@@ -41,7 +41,7 @@ const defaultProfile: UserProfile = {
   watchedMovies: [],
   favoriteMovies: [],
   imdbConnected: false,
-  kinopoiskConnected: false,
+  is_kinopoisk_synchronized: false,
 };
 
 function loadStoredProfile(): UserProfile {
@@ -78,7 +78,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // Note: If /users/me fails (e.g. invalid token), interceptor might clear tokens.
       // We should handle that gracefully.
       const userData = await authService.getMe();
-      setUser({ ...userData, profile: loadStoredProfile() });
+
+      // Базовый профиль: либо из localStorage, либо дефолтный.
+      const storedProfile = loadStoredProfile();
+      const mergedProfile: UserProfile = {
+        ...storedProfile,
+        is_kinopoisk_synchronized:
+          userData.is_kinopoisk_synchronized ?? storedProfile.is_kinopoisk_synchronized,
+      };
+
+      // Сохраняем профиль сразу после успешного /me.
+      storeProfile(mergedProfile);
+
+      setUser({ ...userData, profile: mergedProfile });
     } catch (error) {
       console.error("Auth check failed:", error);
       clearTokens();
@@ -122,6 +134,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const logout = () => {
     authService.logout();
+    clearTokens();
+    try {
+      localStorage.clear();
+    } catch {
+      // ignore
+    }
     setUser(null);
   };
 

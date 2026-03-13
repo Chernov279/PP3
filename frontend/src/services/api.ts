@@ -1,7 +1,15 @@
-import { Genre, Movie } from "../types/movie";
+import { Genre, Movie, Person } from "../types/movie";
 import { LoginRequest, RegisterRequest, TokenResponse, UserResponse } from "../types/auth";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8000";
+function getApiBaseUrl() {
+  const raw =
+    import.meta.env.VITE_API_BASE_URL ||
+    import.meta.env.VITE_API_URL ||
+    "http://localhost:8000";
+  return String(raw).replace(/\/+$/, "");
+}
+
+const API_BASE_URL = getApiBaseUrl();
 
 type BackendGenre = { id: number; name: string };
 type BackendRecommendedFilm = {
@@ -52,6 +60,14 @@ type BackendFilm = {
   release_date?: string | null;
   description?: string | null;
   popularity?: number | null;
+};
+
+type BackendSimilarFilm = {
+  filmId: number;
+  nameRu?: string | null;
+  nameEn?: string | null;
+  nameOriginal?: string | null;
+  posterUrl?: string | null;
 };
 
 function normalizeMovieFromRecommendation(m: BackendRecommendedFilm): Movie {
@@ -215,7 +231,7 @@ export const authService = {
   },
 
   async getMe(): Promise<UserResponse> {
-    return apiRequest<UserResponse>("/user/me");
+    return apiRequest<UserResponse>("/users/me");
   },
 
   logout() {
@@ -246,8 +262,20 @@ export const movieService = {
   },
 
   async getSimilarFilms(filmId: number): Promise<Movie[]> {
-    const raw = await apiRequest<BackendFilm[]>(`/films/${filmId}/similars`);
-    return raw.map(normalizeMovieFromFilm);
+    const raw = await apiRequest<BackendSimilarFilm[]>(`/films/${filmId}/similars`);
+    return raw.map((s) => ({
+      id: s.filmId,
+      title: s.nameOriginal || s.nameRu || s.nameEn || `Фильм ${s.filmId}`,
+      year: 0,
+      genres: [],
+      rating: 0,
+      popularity: 0,
+      description: "",
+      poster: s.posterUrl || "",
+      actors: [],
+      director: "",
+      playerUrl: "",
+    }));
   },
 
   async getAllGenres(): Promise<Genre[]> {
@@ -255,12 +283,8 @@ export const movieService = {
   },
 
   async syncKinopoiskWatchHistory(kinopoiskId: number): Promise<any> {
-    const me = await authService.getMe();
-    const query = new URLSearchParams({
-      kinopoisk_id: String(kinopoiskId),
-      debug_user_id: String(me.id),
-    });
-    return apiRequest(`/user/sync_kinopoisk_info?${query.toString()}`, { method: "POST" });
+    const query = new URLSearchParams({ kinopoisk_id: String(kinopoiskId) });
+    return apiRequest(`/users/sync_kinopoisk_info?${query.toString()}`, { method: "POST" });
   },
   
   async getFilmDetails(filmId: number): Promise<Movie> {
@@ -272,8 +296,7 @@ export const movieService = {
     return apiRequest<Genre[]>(`/films/${filmId}/genres`);
   },
 
-  async searchFilms(query: string): Promise<Movie[]> {
-    // В предоставленном списке эндпоинтов нет поиска. Мокаем пустой ответ, чтобы не вызывать ошибку 404
+  async searchFilms(_query: string): Promise<Movie[]> {
     return [];
   }
 };
@@ -281,33 +304,84 @@ export const movieService = {
 export const userService = {
   async getUser(userId: string | number = "me"): Promise<UserResponse> {
     const id = String(userId);
-    const endpoint = id === "me" ? "/user/me" : `/user/${id}`;
+    const endpoint = id === "me" ? "/users/me" : `/users/${id}`;
     return apiRequest<UserResponse>(endpoint);
   },
 
   async updateUser(data: { name: string; email: string }): Promise<UserResponse> {
-    return apiRequest<UserResponse>(`/user/`, {
+    return apiRequest<UserResponse>(`/users/`, {
       method: "PUT",
       body: JSON.stringify(data),
     });
   },
   
-  async getFavorites(userId: string = "me"): Promise<Movie[]> {
-    // Эндпоинта избранного нет в списке, мокаем
-    return [];
+  async getFavorites(_userId: string = "me"): Promise<Movie[]> {
+    const raw = await apiRequest<BackendFilm[]>(`/films/favorite`);
+    return raw.map(normalizeMovieFromFilm);
   },
 
-  async toggleFavorite(userId: string = "me", filmId: number, action: "add" | "remove"): Promise<{ success: boolean }> {
-    // Эндпоинта избранного нет в списке, мокаем
+  async toggleFavorite(
+    _userId: string = "me",
+    filmId: number,
+    action: "add" | "remove"
+  ): Promise<{ success: boolean }> {
+    if (action === "add") {
+      await apiRequest(`/films/favorite/${filmId}`, { method: "POST" });
+    } else {
+      await apiRequest(`/films/favorite/${filmId}`, { method: "DELETE" });
+    }
     return { success: true };
   },
   
-  async getWatched(userId: string = "me"): Promise<Movie[]> {
+  async getWatched(userId: string | number = "me"): Promise<Movie[]> {
     // Если userId = "me", нам возможно нужно получить id из контекста.
     // Но бэкенд может принимать и "me", либо мы просто передаем id. 
     // Предполагаем, что бэкенд ожидает реальный user_id, так как в роуте `/users/{user_id}/films`
     // Будем подставлять userId
-    const raw = await apiRequest<BackendWatchHistoryItem[]>(`/user/${userId}/films`);
+    const raw = await apiRequest<BackendWatchHistoryItem[]>(`/users/${String(userId)}/films`);
     return raw.map(normalizeMovieFromWatchHistory);
   }
+};
+
+export const genreService = {
+  async getFavorites(): Promise<Genre[]> {
+    return apiRequest<Genre[]>("/genres/favorite");
+  },
+  async addFavorite(genreId: number): Promise<boolean> {
+    return apiRequest<boolean>(`/genres/favorite/${genreId}`, { method: "POST" });
+  },
+  async removeFavorite(genreId: number): Promise<boolean> {
+    return apiRequest<boolean>(`/genres/favorite/${genreId}`, { method: "DELETE" });
+  },
+};
+
+export const personService = {
+  async search(query: string, page = 1): Promise<Person[]> {
+    const params = new URLSearchParams({ query, page: String(page) });
+    const raw = await apiRequest<
+      {
+        kinopoiskId: number;
+        nameRu?: string | null;
+        nameEn?: string | null;
+        posterUrl?: string | null;
+        profession?: string | null;
+      }[]
+    >(`/persons/search?${params.toString()}`);
+    return raw.map((p) => ({
+      id: p.kinopoiskId,
+      name_ru: p.nameRu,
+      name_en: p.nameEn,
+      poster_url: p.posterUrl,
+      profession: p.profession,
+    }));
+  },
+  async getFavorites(): Promise<Person[]> {
+    return apiRequest<Person[]>("/persons/favorite");
+  },
+  async addFavorite(personId: number): Promise<boolean> {
+    return apiRequest<boolean>(`/persons/favorite/${personId}`, { method: "POST" });
+  },
+  async removeFavorite(personId: number): Promise<boolean> {
+    return apiRequest<boolean>(`/persons/favorite/${personId}`, { method: "DELETE" });
+  },
 };

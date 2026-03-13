@@ -5,7 +5,6 @@ import { Button } from "./ui/button";
 import { Filter, RotateCcw } from "lucide-react";
 import { Badge } from "./ui/badge";
 import { GenreFilter } from "./GenreFilter";
-import { Genre } from "../types/movie"
 
 interface FilterPanelProps {
   popularityWeight: number[];
@@ -17,6 +16,7 @@ interface FilterPanelProps {
   selectedGenres: string[];
   onGenresChange: (genres: string[]) => void;
   allGenres: string[];
+  favoriteGenres?: string[];
 }
 
 export function FilterPanel({
@@ -29,6 +29,7 @@ export function FilterPanel({
   selectedGenres,
   onGenresChange,
   allGenres,
+  favoriteGenres = [],
 }: FilterPanelProps) {
   // Локальное состояние для draft-значений
   const [draftPopularity, setDraftPopularity] = useState<number[]>(popularityWeight);
@@ -93,6 +94,7 @@ export function FilterPanel({
             allGenres={allGenres}
             selectedGenres={selectedGenres}
             onGenresChange={onGenresChange}
+            favoriteGenres={favoriteGenres}
           />
           <Button
             variant="outline"
@@ -138,25 +140,25 @@ export function FilterPanel({
           </div>
         </div>
 
-        {/* Фильтр минимального рейтинга */}
+        {/* Фильтр веса персонализации */}
         <div className="space-y-3">
           <div className="flex justify-between items-center">
-            <Label>Минимальный рейтинг</Label>
+            <Label>Вес персонализации</Label>
             <span className="text-sm text-muted-foreground">
-              {draftRating[0].toFixed(1)}+
+              {draftRating[0].toFixed(0)}%
             </span>
           </div>
           <Slider
             value={draftRating}
             onValueChange={setDraftRating}
             min={0}
-            max={10}
-            step={0.1}
+            max={100}
+            step={1}
             className="w-full"
           />
           <div className="flex justify-between text-xs text-muted-foreground">
-            <span>0.0</span>
-            <span>10.0</span>
+            <span>0%</span>
+            <span>100%</span>
           </div>
         </div>
 

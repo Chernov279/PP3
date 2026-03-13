@@ -66,12 +66,22 @@ export function MovieDetailsDialog({
         </DialogHeader>
         
         <div className="grid md:grid-cols-[300px,1fr] gap-6">
-          <div className="aspect-[2/3] relative overflow-hidden rounded-lg bg-muted">
-            <img
-              src={movie.poster}
-              alt={movie.titleRu || movie.title}
-              className="w-full h-full object-cover"
-            />
+          <div className="aspect-[2/3] relative overflow-hidden rounded-lg bg-muted flex items-center justify-center">
+            {movie.poster ? (
+              <img
+                src={movie.poster}
+                alt={movie.titleRu || movie.title}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.currentTarget.style.display = "none";
+                }}
+              />
+            ) : null}
+            {!movie.poster && (
+              <span className="px-3 text-center text-xs text-muted-foreground">
+                ИЗОБРАЖЕНИЕ НЕДОСТУПНО
+              </span>
+            )}
           </div>
           
           <div className="space-y-4">
@@ -80,7 +90,9 @@ export function MovieDetailsDialog({
                 <Star className="h-5 w-5 fill-yellow-400 text-yellow-400" />
                 <span>{movie.rating}</span>
               </div>
-              <span className="text-muted-foreground">{movie.year}</span>
+              <span className="text-muted-foreground">
+                {movie.year && movie.year > 0 ? movie.year : "-"}
+              </span>
               <Button
                 variant={isFavorite ? "default" : "outline"}
                 size="sm"

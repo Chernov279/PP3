@@ -28,10 +28,18 @@ export interface Movie {
 
 export interface UserProfile {
   favoriteGenres: string[];
-  favoriteActors: string[];
+  favoriteActors: string[]; // display names
   watchedMovies: number[];
   favoriteMovies: number[];
   imdbConnected: boolean;
-  kinopoiskConnected: boolean;
+  is_kinopoisk_synchronized: boolean;
   kinopoiskUserId?: string;
+}
+
+export interface Person {
+  id: number;
+  name_ru?: string | null;
+  name_en?: string | null;
+  poster_url?: string | null;
+  profession?: string | null;
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Header } from "./components/Header";
 import { MovieCatalog } from "./components/MovieCatalog";
 import { AccountPage } from "./components/AccountPage";
@@ -36,28 +36,34 @@ function AppContent() {
     watchedMovies: [],
     favoriteMovies: [],
     imdbConnected: false,
-    kinopoiskConnected: false,
+    is_kinopoisk_synchronized: user?.profile?.is_kinopoisk_synchronized || false,
   };
 
   const fetchGenres = useCallback(() => movieService.getAllGenres(), []);
 
   // Загружаем жанры из API (fetch on mount if authenticated)
-  const { data: apiGenresRaw, loading: genresLoading } = useApi(
-    fetchGenres,
-    { immediate: isAuthenticated }
-  );
+  const {
+    data: apiGenresRaw,
+    refetch: refetchGenres,
+  } = useApi(fetchGenres, { immediate: false });
 
-  const allGenres: Genre[] = apiGenresRaw || [];
-  const apiGenres = allGenres.map((g) => g.name);
+  const allGenres: Genre[] = useMemo(() => apiGenresRaw || [], [apiGenresRaw]);
+  const apiGenres = useMemo(() => allGenres.map((g) => g.name), [allGenres]);
+
+  // Подтягиваем жанры, когда пользователь авторизован
+  useEffect(() => {
+    if (isAuthenticated) {
+      refetchGenres();
+    }
+  }, [isAuthenticated, refetchGenres]);
 
   // Determine if we should fetch recommendations
-  const shouldFetchRecommendations = isAuthenticated && userProfile.kinopoiskConnected;
+  // Загружаем рекомендации только если пользователь синхронизировал Кинопоиск.
+  const shouldFetchRecommendations = isAuthenticated && userProfile.is_kinopoisk_synchronized;
 
   const fetchRecommendations = useCallback(() => {
     const popularityW = Math.min(1, Math.max(0, popularityWeight[0] / 100));
-    const remaining = 1 - popularityW;
-    const noveltyW = remaining / 2;
-    const personalizationW = remaining / 2;
+    const personalizationW = Math.min(1, Math.max(0, minRating[0] / 100));
 
     const selectedGenreIds = selectedGenres
       .map((name) => allGenres.find((g) => g.name === name)?.id)
@@ -66,13 +72,12 @@ function AppContent() {
     return movieService.getRecommendations({
       user_id: user?.id,
       popularity_weight: popularityW,
-      novelty_weight: noveltyW,
       personalization_weight: personalizationW,
       year_from: yearRange[0],
       genre_ids: selectedGenreIds.length ? selectedGenreIds : undefined,
       limit: 50,
     });
-  }, [allGenres, selectedGenres, popularityWeight, user?.id, yearRange]);
+  }, [allGenres, selectedGenres, popularityWeight, minRating, user?.id, yearRange]);
 
   const {
     data: recommendedMovies,
@@ -184,7 +189,7 @@ function AppContent() {
         <>
           {currentView === "catalog" && (
             <>
-              {!userProfile.kinopoiskConnected ? (
+              {!userProfile.is_kinopoisk_synchronized ? (
                 <div className="container mx-auto px-4 py-20 flex flex-col items-center text-center space-y-6">
                   <h2 className="text-2xl font-semibold">Подключите Кинопоиск</h2>
                   <p className="text-muted-foreground max-w-md">

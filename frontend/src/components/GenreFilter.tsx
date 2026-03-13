@@ -13,18 +13,19 @@ import {
 } from "./ui/dialog";
 import { Filter } from "lucide-react";
 import { ScrollArea } from "./ui/scroll-area";
-import { Genre } from "../types/movie"
 
 interface GenreFilterProps {
   allGenres: string[];
   selectedGenres: string[];
   onGenresChange: (genres: string[]) => void;
+  favoriteGenres?: string[];
 }
 
 export function GenreFilter({
   allGenres,
   selectedGenres,
   onGenresChange,
+  favoriteGenres = [],
 }: GenreFilterProps) {
   const [open, setOpen] = useState(false);
   const [draftGenres, setDraftGenres] = useState<string[]>(selectedGenres);
@@ -53,6 +54,14 @@ export function GenreFilter({
 
   const handleReset = () => {
     setDraftGenres([]);
+  };
+
+  const handleAddFavorites = () => {
+    setDraftGenres((prev) => {
+      const next = new Set(prev);
+      favoriteGenres.forEach((g) => next.add(g));
+      return Array.from(next);
+    });
   };
 
   return (
@@ -101,8 +110,18 @@ export function GenreFilter({
         </ScrollArea>
 
         <div className="flex items-center justify-between pt-2 border-t">
-          <div className="text-sm text-muted-foreground">
-            Выбрано: {draftGenres.length}
+          <div className="flex flex-col gap-1 text-sm text-muted-foreground">
+            <span>Выбрано: {draftGenres.length}</span>
+            {favoriteGenres.length > 0 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="px-0 justify-start"
+                onClick={handleAddFavorites}
+              >
+                Добавить любимые жанры
+              </Button>
+            )}
           </div>
           <Button
             variant="ghost"

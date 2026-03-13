@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
@@ -10,7 +10,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "./ui/dialog";
 import {
   Tabs,
@@ -18,11 +17,11 @@ import {
   TabsList,
   TabsTrigger,
 } from "./ui/tabs";
-import { ArrowLeft, Film, Star, Heart, Plus, Trash2, Link as LinkIcon, Loader2 } from "lucide-react";
-import { Movie, UserProfile } from "../types/movie";
+import { Plus, Trash2, Link as LinkIcon, Loader2 } from "lucide-react";
+import { Movie, Person, UserProfile } from "../types/movie";
 import { MovieCard } from "./MovieCard";
 import { useAuth } from "../contexts/AuthContext";
-import { userService, movieService } from "../services/api";
+import { userService, movieService, genreService, personService } from "../services/api";
 import { useApi } from "../hooks/useApi";
 import { toast } from "sonner";
 
@@ -41,7 +40,8 @@ export function AccountPage({
 }: AccountPageProps) {
   const { user } = useAuth();
   const [newActor, setNewActor] = useState("");
-  const [isAddActorOpen, setIsAddActorOpen] = useState(false);
+  const [isSearchingActor, setIsSearchingActor] = useState(false);
+  const [actorSuggestions, setActorSuggestions] = useState<Person[]>([]);
 
   // States for Kinopoisk Sync Dialog
   const [isKinopoiskDialogOpen, setIsKinopoiskDialogOpen] = useState(false);
@@ -56,6 +56,8 @@ export function AccountPage({
 
   const fetchFavorites = useCallback(() => userService.getFavorites("me"), []);
   const fetchAllGenres = useCallback(() => movieService.getAllGenres(), []);
+  const fetchFavoriteGenres = useCallback(() => genreService.getFavorites(), []);
+  const fetchFavoritePersons = useCallback(() => personService.getFavorites(), []);
 
   // Fetch data
   const { data: watchedMovies, loading: watchedLoading } = useApi(
@@ -69,52 +71,132 @@ export function AccountPage({
   );
   
   const { data: allGenresRaw } = useApi(fetchAllGenres, { immediate: true });
-  const allGenres = useMemo(() => allGenresRaw?.map(g => g.name) || [], [allGenresRaw]);
+  const allGenres = useMemo(() => allGenresRaw || [], [allGenresRaw]);
 
-  const handleAddGenre = (genre: string) => {
+  const {
+    data: favoriteGenresRaw,
+    refetch: refetchFavoriteGenres,
+  } = useApi(fetchFavoriteGenres, { immediate: true });
+
+  const {
+    data: favoritePersonsRaw,
+    refetch: refetchFavoritePersons,
+  } = useApi(fetchFavoritePersons, { immediate: !!user?.id });
+
+  const uniqueWatchedMovies = useMemo(() => {
+    const seen = new Set<number>();
+    return (watchedMovies || []).filter((movie) => {
+      if (seen.has(movie.id)) return false;
+      seen.add(movie.id);
+      return true;
+    });
+  }, [watchedMovies]);
+
+  const uniqueFavoriteMovies = useMemo(() => {
+    const seen = new Set<number>();
+    return (favoriteMovies || []).filter((movie) => {
+      if (seen.has(movie.id)) return false;
+      seen.add(movie.id);
+      return true;
+    });
+  }, [favoriteMovies]);
+
+  // Sync favorite genres from backend into local profile state
+  useEffect(() => {
+    if (!favoriteGenresRaw) return;
+    const names = favoriteGenresRaw.map((g) => g.name);
+    if (JSON.stringify(names) !== JSON.stringify(profile.favoriteGenres || [])) {
+      onUpdateProfile({ ...profile, favoriteGenres: names });
+    }
+  }, [favoriteGenresRaw, profile.favoriteGenres, onUpdateProfile, profile]);
+
+  // Sync favorite persons (actors) from backend into local profile state
+  useEffect(() => {
+    if (!favoritePersonsRaw) return;
+    const names = favoritePersonsRaw.map(
+      (p) => p.name_ru || p.name_en || `ID ${p.id}`
+    );
+    if (JSON.stringify(names) !== JSON.stringify(profile.favoriteActors || [])) {
+      onUpdateProfile({ ...profile, favoriteActors: names });
+    }
+  }, [favoritePersonsRaw, profile.favoriteActors, onUpdateProfile, profile]);
+
+  const handleAddGenre = async (genre: string) => {
     const currentGenres = profile.favoriteGenres || [];
-    if (!currentGenres.includes(genre)) {
-      onUpdateProfile({
-        ...profile,
-        favoriteGenres: [...currentGenres, genre],
-      });
+    if (currentGenres.includes(genre)) return;
+
+    const genreId = allGenres.find((g) => g.name === genre)?.id;
+    if (typeof genreId === "number") {
+      await genreService.addFavorite(genreId);
+      await refetchFavoriteGenres();
     }
   };
 
-  const handleRemoveGenre = (genre: string) => {
-    onUpdateProfile({
-      ...profile,
-      favoriteGenres: profile.favoriteGenres.filter(
-        (g) => g !== genre,
-      ),
-    });
+  const handleRemoveGenre = async (genre: string) => {
+    const genreId = allGenres.find((g) => g.name === genre)?.id;
+    if (typeof genreId === "number") {
+      await genreService.removeFavorite(genreId);
+    }
+    await refetchFavoriteGenres();
   };
 
-  const handleAddActor = () => {
+  const handleSearchActors = useCallback(async (query: string) => {
+    if (!query.trim()) {
+      setActorSuggestions([]);
+      return;
+    }
+    setIsSearchingActor(true);
+    try {
+      const results = await personService.search(query.trim(), 1);
+      setActorSuggestions(results.slice(0, 3));
+    } catch (e) {
+      console.error(e);
+      setActorSuggestions([]);
+    } finally {
+      setIsSearchingActor(false);
+    }
+  }, []);
+
+  const handleSelectActor = async (person: Person) => {
     const currentActors = profile.favoriteActors || [];
-    if (
-      newActor.trim() &&
-      !currentActors.includes(newActor.trim())
-    ) {
+    const displayName = person.name_ru || person.name_en || `ID ${person.id}`;
+    if (currentActors.includes(displayName)) return;
+
+    try {
+      await personService.addFavorite(person.id);
+      // Локально обновляем профиль
       onUpdateProfile({
         ...profile,
-        favoriteActors: [
-          ...currentActors,
-          newActor.trim(),
-        ],
+        favoriteActors: [...currentActors, displayName],
       });
+      // И сразу же подтягиваем актуальный список с бэка
+      await refetchFavoritePersons();
       setNewActor("");
-      setIsAddActorOpen(false);
+      setActorSuggestions([]);
+      toast.success("Актёр добавлен в любимые");
+    } catch (e) {
+      console.error(e);
+      toast.error("Не удалось добавить актёра в избранное");
     }
   };
 
-  const handleRemoveActor = (actor: string) => {
-    onUpdateProfile({
-      ...profile,
-      favoriteActors: profile.favoriteActors.filter(
-        (a) => a !== actor,
-      ),
-    });
+  const handleRemoveActor = async (actor: string) => {
+    try {
+      const results = await personService.search(actor, 1);
+      if (results.length) {
+        await personService.removeFavorite(results[0].id);
+      }
+      onUpdateProfile({
+        ...profile,
+        favoriteActors: profile.favoriteActors.filter(
+          (a) => a !== actor,
+        ),
+      });
+      await refetchFavoritePersons();
+    } catch (e) {
+      console.error(e);
+      toast.error("Не удалось удалить актёра из избранного");
+    }
   };
 
   const handleToggleConnection = (
@@ -124,10 +206,10 @@ export function AccountPage({
       ...profile,
       [platform === "imdb"
         ? "imdbConnected"
-        : "kinopoiskConnected"]:
+        : "is_kinopoisk_synchronized"]:
         platform === "imdb"
           ? !profile.imdbConnected
-          : !profile.kinopoiskConnected,
+          : !profile.is_kinopoisk_synchronized,
     });
   };
 
@@ -138,7 +220,7 @@ export function AccountPage({
       await movieService.syncKinopoiskWatchHistory(Number(kinopoiskIdInput));
       onUpdateProfile({
         ...profile,
-        kinopoiskConnected: true,
+        is_kinopoisk_synchronized: true,
       });
       setIsKinopoiskDialogOpen(false);
       setKinopoiskIdInput("");
@@ -235,7 +317,7 @@ export function AccountPage({
                     <div>
                       <h4>Кинопоиск</h4>
                       <p className="text-muted-foreground">
-                        {profile.kinopoiskConnected
+                        {profile.is_kinopoisk_synchronized
                           ? "Подключено"
                           : "Не подключено"}
                       </p>
@@ -243,12 +325,12 @@ export function AccountPage({
                   </div>
                   <Button
                     variant={
-                      profile.kinopoiskConnected
+                      profile.is_kinopoisk_synchronized
                         ? "outline"
                         : "default"
                     }
                     onClick={() => {
-                      if (profile.kinopoiskConnected) {
+                      if (profile.is_kinopoisk_synchronized) {
                         handleToggleConnection("kinopoisk");
                       } else {
                         setIsKinopoiskDialogOpen(true);
@@ -256,7 +338,7 @@ export function AccountPage({
                     }}
                   >
                     <LinkIcon className="h-4 w-4 mr-2" />
-                    {profile.kinopoiskConnected
+                    {profile.is_kinopoisk_synchronized
                       ? "Отключить"
                       : "Подключить"}
                   </Button>
@@ -309,7 +391,7 @@ export function AccountPage({
               <CardHeader>
                 <CardTitle>Просмотренные фильмы</CardTitle>
                 <CardDescription>
-                  Всего просмотрено: {(watchedMovies || []).length}
+                  Всего просмотрено: {uniqueWatchedMovies.length}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -319,7 +401,7 @@ export function AccountPage({
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {(watchedMovies || []).map((movie) => (
+                    {uniqueWatchedMovies.map((movie) => (
                       <MovieCard
                         key={movie.id}
                         movie={movie}
@@ -342,7 +424,7 @@ export function AccountPage({
               <CardHeader>
                 <CardTitle>Избранные фильмы</CardTitle>
                 <CardDescription>
-                  Всего в избранном: {(favoriteMovies || []).length}
+                  Всего в избранном: {uniqueFavoriteMovies.length}
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -352,7 +434,7 @@ export function AccountPage({
                   </div>
                 ) : (
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {(favoriteMovies || []).map((movie) => (
+                    {uniqueFavoriteMovies.map((movie) => (
                       <MovieCard
                         key={movie.id}
                         movie={movie}
@@ -375,12 +457,11 @@ export function AccountPage({
               <CardHeader>
                 <CardTitle>Любимые жанры</CardTitle>
                 <CardDescription>
-                  Выберите жанры, которые вам нравятся
+                  Управляйте списком любимых жанров
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div>
-                  <h4 className="mb-3">Выбранные жанры</h4>
                   <div className="flex flex-wrap gap-2">
                     {(profile.favoriteGenres || []).map((genre) => (
                       <Badge
@@ -401,7 +482,7 @@ export function AccountPage({
                     ))}
                     {(profile.favoriteGenres || []).length === 0 && (
                       <p className="text-muted-foreground">
-                        Жанры не выбраны
+                        Любимых жанров пока нет
                       </p>
                     )}
                   </div>
@@ -413,17 +494,17 @@ export function AccountPage({
                     {(allGenres || [])
                       .filter(
                         (g) =>
-                          !(profile.favoriteGenres || []).includes(g),
+                          !(profile.favoriteGenres || []).includes(g.name),
                       )
                       .map((genre) => (
                         <Button
-                          key={genre}
+                          key={genre.id}
                           variant="outline"
                           size="sm"
-                          onClick={() => handleAddGenre(genre)}
+                          onClick={() => handleAddGenre(genre.name)}
                         >
                           <Plus className="h-3 w-3 mr-1" />
-                          {genre}
+                          {genre.name}
                         </Button>
                       ))}
                   </div>
@@ -441,42 +522,40 @@ export function AccountPage({
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                <Dialog
-                  open={isAddActorOpen}
-                  onOpenChange={setIsAddActorOpen}
-                >
-                  <DialogTrigger asChild>
-                    <Button>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Добавить актёра
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Добавить актёра</DialogTitle>
-                    </DialogHeader>
-                    <div className="space-y-4">
-                      <Input
-                        placeholder="Введите имя актёра"
-                        value={newActor}
-                        onChange={(e) =>
-                          setNewActor(e.target.value)
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") {
-                            handleAddActor();
-                          }
-                        }}
-                      />
-                      <Button
-                        onClick={handleAddActor}
-                        className="w-full"
-                      >
-                        Добавить
-                      </Button>
-                    </div>
-                  </DialogContent>
-                </Dialog>
+                <div className="space-y-3">
+                  <div className="space-y-2">
+                    <Input
+                      placeholder="Начните вводить имя актёра"
+                      value={newActor}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setNewActor(value);
+                        handleSearchActors(value);
+                      }}
+                    />
+                    {isSearchingActor && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Поиск актёров...
+                      </div>
+                    )}
+                    {actorSuggestions.length > 0 && (
+                      <div className="space-y-1">
+                        {actorSuggestions.map((person) => (
+                          <Button
+                            key={person.id}
+                            variant="ghost"
+                            size="sm"
+                            className="w-full justify-start"
+                            onClick={() => handleSelectActor(person)}
+                          >
+                            {person.name_ru || person.name_en || `ID ${person.id}`}
+                          </Button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
 
                 <div className="flex flex-wrap gap-2">
                   {(profile.favoriteActors || []).map((actor) => (

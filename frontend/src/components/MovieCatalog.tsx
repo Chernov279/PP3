@@ -34,7 +34,9 @@ export function MovieCatalog({
   allGenres,
   loading = false,
 }: MovieCatalogProps) {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
+
+  const favoriteGenres = user?.profile?.favoriteGenres || [];
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -64,6 +66,7 @@ export function MovieCatalog({
         selectedGenres={selectedGenres}
         onGenresChange={onGenresChange}
         allGenres={allGenres}
+        favoriteGenres={favoriteGenres}
       />
       
       {loading ? (

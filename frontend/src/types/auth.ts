@@ -20,5 +20,5 @@ export interface UserResponse {
   id: number;
   email: string;
   name: string;
-  // Add other user fields if necessary
+  is_kinopoisk_synchronized?: boolean;
 }
