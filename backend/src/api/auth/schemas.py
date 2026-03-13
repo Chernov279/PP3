@@ -62,6 +62,7 @@ class UserOut(UserBaseSchema):
     email: str
     name: str
     is_kinopoisk_synchronized: bool
+    created_at: datetime
 
     class Config:
         from_attributes = True
