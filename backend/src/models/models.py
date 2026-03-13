@@ -1,7 +1,7 @@
 from token import OP
 from typing import List, Any, Optional
 
-from sqlalchemy import Column, Integer, String, DateTime, Text, Date, JSON, Float, Boolean, ForeignKey, func
+from sqlalchemy import Column, Integer, String, DateTime, Text, Date, JSON, Float, Boolean, ForeignKey, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 from datetime import datetime, timezone, date
@@ -171,6 +171,7 @@ class User(DeclarativeBaseModel):
     name: Mapped[str] = mapped_column(String, unique=True, index=True)
     email: Mapped[str] = mapped_column(String, unique=True, index=True)
     hashed_password: Mapped[str] = mapped_column(String)
+    is_kinopoisk_synchronized: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     # Предпочтения для рекомендаций
@@ -205,6 +206,7 @@ class Review(DeclarativeBaseModel):
 
 class WatchHistory(DeclarativeBaseModel):
     __tablename__ = "watch_history"
+    __table_args__ = (UniqueConstraint('user_id', 'movie_id', name='uq_user_movie'),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, index=True)
 
