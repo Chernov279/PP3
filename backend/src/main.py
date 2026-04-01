@@ -57,7 +57,7 @@ async def shutdown_event():
 if __name__ == "__main__":
         uvicorn.run(
         "backend.src.main:app",
-        host="192.168.196.88",
+        host="0.0.0.0",
         port=8000,
         reload=False
     )
