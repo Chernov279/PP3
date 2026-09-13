@@ -6,6 +6,7 @@ from sqlalchemy import pool
 from alembic import context
 
 from backend.src.models.models import DeclarativeBaseModel
+from backend.src.config import settings
 
 # this is the Alembic Config object, which provides
 # access to the values within the .ini file in use.
@@ -28,6 +29,8 @@ target_metadata = DeclarativeBaseModel.metadata
 # can be acquired:
 # my_important_option = config.get_main_option("my_important_option")
 # ... etc.
+from backend.src.config import settings
+config.set_main_option("sqlalchemy.url", settings.POSTGRES_URL_SYNC)
 
 
 def run_migrations_offline() -> None:
@@ -61,6 +64,7 @@ def run_migrations_online() -> None:
     and associate a connection with the context.
 
     """
+    # config.set_main_option("sqlalchemy.url", settings.POSTGRES_URL_SYNC)
     connectable = engine_from_config(
         config.get_section(config.config_ini_section, {}),
         prefix="sqlalchemy.",
