@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, File, UploadFile, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.src.api.users.helpers import map_user_out
 from backend.src.database.connection import get_db_session
+from backend.src.database.s3.storage_service import S3StorageService
 from .service import UserService
 from ..auth.dependencies import get_token_sub_required
 from ..auth.schemas import UserOut, UserUpdateIn
@@ -14,6 +15,29 @@ async def get_user_service(
     session: AsyncSession = Depends(get_db_session),
 ) -> UserService:
     return UserService(session)
+
+
+def get_storage_service() -> S3StorageService:
+    return S3StorageService()
+
+@user.post("/me/avatar")
+async def upload_avatar(
+    file: UploadFile = File(...),
+    user_id: int = Depends(get_token_sub_required),
+    profile_service: UserService = Depends(get_user_service),
+    storage_service: S3StorageService = Depends(get_storage_service),
+):
+    url = await profile_service.upload_avatar(user_id, file, storage_service)
+    return url
+
+@user.delete("/me/avatar")
+async def delete_avatar(
+    user_id: int = Depends(get_token_sub_required),
+    profile_service: UserService = Depends(get_user_service),
+    storage_service: S3StorageService = Depends(get_storage_service),
+):
+    profile = await profile_service.delete_avatar(user_id, storage_service)
+    return profile.avatar_url
 
 
 @user.get("/me")
@@ -116,3 +140,4 @@ async def sync_kinopoisk_watch_history(
     user = await user_service.sync_kinopoisk_info(kinopoisk_id, user_id)
 
     return user
+

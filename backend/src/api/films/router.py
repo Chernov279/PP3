@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, Path
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.src.database.connection import get_db_session
+from backend.src.schemas.base import FullMultiGetParams, MultiGetParams
 from .service import FilmService
 from ..auth.dependencies import get_token_sub_required
 
@@ -14,9 +15,10 @@ async def get_film_service(
 @films.get("/all-genres")
 async def get_all_genres(
     user_id: int = Depends(get_token_sub_required),
+    numeric_get_params: MultiGetParams = Depends(),
     service: FilmService = Depends(get_film_service)
 ):
-    return await service.get_all_genres()
+    return await service.get_all_genres(**numeric_get_params.model_dump())
 
 
 @films.get("/search")
@@ -27,13 +29,24 @@ async def search_film(
 ):
     return await service.search_film(q, page)
 
+
+@films.get("/db-search")
+async def db_search_film(
+    q: str | None = None,
+    numeric_multi_get_params: FullMultiGetParams = Depends(),
+    service: FilmService = Depends(get_film_service)
+):
+    return await service.db_search_film(q, **numeric_multi_get_params.model_dump())
+
+
 @films.get("/favorite")
 async def get_favorite_movies(
     user_id: int = Depends(get_token_sub_required),
+    numeric_get_params: MultiGetParams = Depends(),
     movie_service: FilmService = Depends(get_film_service),
 ):
     """Получить список избранных фильмов текущего пользователя."""
-    return await movie_service.get_favorite_movies(user_id)
+    return await movie_service.get_favorite_movies(user_id, **numeric_get_params.model_dump())
 
 @films.post("/favorite/{movie_id}")
 async def add_movie_to_favorites(
@@ -65,6 +78,7 @@ async def get_film_genres(
 async def get_film_similars(
     film_id: int = 725190,
     user_id: int = Depends(get_token_sub_required),
+    numeric_get_params: MultiGetParams = Depends(),
     service: FilmService = Depends(get_film_service)
 ):
-    return await service.get_film_similars(film_id)
+    return await service.get_film_similars(film_id, **numeric_get_params.model_dump())

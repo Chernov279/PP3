@@ -1,6 +1,6 @@
-from typing import ClassVar, Any
+from typing import ClassVar, Any, Literal, Optional
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class BaseSchema(BaseModel):
@@ -24,3 +24,12 @@ class BaseSchema(BaseModel):
             if hasattr(cls.__model__, field)
         ]
         return cls._model_columns_cache
+    
+class MultiGetParams(BaseModel):
+    limit: int = Field(10, ge=1, le=100)
+    page: int = Field(1, ge=1)
+
+
+class FullMultiGetParams(MultiGetParams):
+    sort: Optional[Literal['kp_rating', 'release_date', 'imdb_rating']] = None
+    order: Literal['asc', 'desc'] = 'desc'

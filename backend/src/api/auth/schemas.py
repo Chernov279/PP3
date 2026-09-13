@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import EmailStr, field_validator
+from pydantic import EmailStr, Field, field_validator
 
 from backend.src.config import settings
 from backend.src.models.models import User
@@ -14,8 +14,8 @@ class UserBaseSchema(BaseSchema):
 
 
 class AuthLoginIn(UserBaseSchema):
-    email: EmailStr
-    password: str
+    email: EmailStr = Field(..., examples=["new-user@example.com"])
+    password: str = Field(default="String123!")
 
     @field_validator("password")
     @classmethod

@@ -1,11 +1,11 @@
 from datetime import date, datetime
 from email.policy import HTTP
-from typing import List, Optional
+from typing import Iterable, List, Optional
 
 from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy import select, delete
+from sqlalchemy import func, select, delete
 
 from backend.src.models.favorite_persons import FavoritePersons
 from backend.src.models.models import Actor
@@ -60,6 +60,20 @@ class PersonService:
         persons = await fetch_search_persons(query, page)
         return persons
         
+    async def db_search_persons(self, query: str, page: int = 1, limit: int = 10) -> Iterable[Actor]:
+        if not query:
+            return []
+        
+        search_query = func.websearch_to_tsquery('russian', query)
+        stmt = select(Actor).where(
+            Actor.search_vector.op('@@')(search_query)
+        ).order_by(
+            func.ts_rank(Actor.search_vector, search_query).desc()
+        ).limit(limit).offset((page - 1) * limit)
+        
+        result = await self.session.execute(stmt)
+        return result.scalars().all()
+
     async def get_person(self, person_id: int):
         actor = await self._get_actor_and_create_if_not_exist(person_id)
         return actor
@@ -95,11 +109,13 @@ class PersonService:
         return result.rowcount > 0  # удалено строк > 0
 
 
-    async def get_favorite_persons(self, user_id: int):
+    async def get_favorite_persons(self, user_id: int, limit: int = 10, page: int = 1):
         stmt = (
             select(Actor)
             .join(FavoritePersons, FavoritePersons.person_id == Actor.id)
             .where(FavoritePersons.user_id == user_id)
+            .limit(limit)
+            .offset((page - 1) * limit)
             .order_by(Actor.popularity.desc().nulls_last())
         )
         result = await self.session.execute(stmt)
