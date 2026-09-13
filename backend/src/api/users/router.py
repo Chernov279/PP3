@@ -46,7 +46,8 @@ async def get_user_me(
     user_service: UserService = Depends(get_user_service)
 ):
     user = await user_service.get_user(user_id)
-    return map_user_out(user)
+    profile = await user_service.get_profile_by_user_id(user_id)
+    return map_user_out(user, avatar_url=profile.avatar_url)
 
 
 @user.get("/{user_id}/films")

@@ -8,12 +8,14 @@ from backend.src.api.auth.schemas import UserOut
 from backend.src.api.fetch_films.service import update_all_movies_details
 from backend.src.models.models import Movie, Genre, MovieGenre, Review, User, WatchHistory
 
-def map_user_out(user_out: UserOut) -> dict:
+def map_user_out(user_out: UserOut, avatar_url: str | None = None) -> dict:
     result = user_out.model_dump()
-    
-    if "created_at" in result and result["created_at"]:
-        # Преобразуем datetime в строку формата DD.MM.YYYY
+
+    if result.get("created_at"):
         result["created_at"] = result["created_at"].strftime("%d.%m.%y")
+
+    result["avatar_url"] = avatar_url
+    return result
     
     return result
 def _to_float_or_none(value) -> Optional[float]:
