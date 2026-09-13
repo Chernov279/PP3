@@ -17,10 +17,10 @@ class Settings(BaseSettings):
     # ============================================
     # База данных
     # ============================================
-    POSTGRES_DB: str
+    POSTGRES_DB: str = "postgres"
     POSTGRES_HOST: str = "localhost"
-    POSTGRES_USER: str
-    POSTGRES_PASSWORD: str
+    POSTGRES_USER: str = "postgres"
+    POSTGRES_PASSWORD: str = "postgres"
     POSTGRES_PORT: int = 5432
     POSTGRES_ECHO_LOG: bool = False
 
@@ -28,11 +28,19 @@ class Settings(BaseSettings):
     # ============================================
     # JWT
     # ============================================
-    SECRET_KEY: str
+    SECRET_KEY: str = ""
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 30
 
+    # ============================================
+    # S3
+    # ============================================
+    MINIO_ENDPOINT: str = "http://minio:9000"
+    MINIO_PUBLIC_URL: str = "http://localhost:9000"
+    MINIO_ACCESS_KEY: str = "minioadmin"
+    MINIO_SECRET_KEY: str = "minioadmin"
+    MINIO_BUCKET_NAME: str = "media"
     # ============================================
     # Computed fields (строятся автоматически)
     # ============================================
