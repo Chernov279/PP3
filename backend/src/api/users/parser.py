@@ -16,7 +16,6 @@ async def fetch_user_reactions(
     """
     headers = {
         "Accept": "*/*",
-        "Accept-Encoding": "gzip, deflate, br, zstd",
         "Accept-Language": "ru,en;q=0.9",
         "Cache-Control": "no-cache",
         "Connection": "keep-alive",
@@ -40,7 +39,7 @@ async def fetch_user_reactions(
         while True:
             variables = {
                 "isAuthorized": True,
-                "socialAlias": user_id,
+                "socialAlias": str(user_id),
                 "includeTypes": ["WATCHED", "VOTE"],
                 "limit": limit,
                 "offset": offset

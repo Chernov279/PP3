@@ -62,7 +62,7 @@ class MovieRepository(SQLAlchemyRepository[Movie]):
                 }
             })
         return history_list
-    async def save(self, data):
+    async def save(self, data) -> None:
         pass
     async def get_similars(self, data):
         pass

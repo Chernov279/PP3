@@ -1,8 +1,8 @@
-from token import OP
 from typing import List, Any, Optional
 
-from sqlalchemy import Column, Integer, String, DateTime, Text, Date, JSON, Float, Boolean, ForeignKey, UniqueConstraint, func
+from sqlalchemy import Column, Computed, Index, Integer, String, DateTime, Text, Date, JSON, Float, Boolean, ForeignKey, UniqueConstraint, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.dialects.postgresql import TSVECTOR
 
 from datetime import datetime, timezone, date
 
@@ -76,6 +76,11 @@ class Movie(DeclarativeBaseModel):
     content_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
     # watch_history = relationship("WatchHistory", back_populates="movie")
+    search_vector = Column(TSVECTOR, nullable=True)
+    
+    __table_args__ = (
+        Index('idx_movie_search_vector', 'search_vector', postgresql_using='gin'),
+    )
 
 class Genre(DeclarativeBaseModel):
     __tablename__ = "genres"
@@ -123,8 +128,14 @@ class Actor(DeclarativeBaseModel):
     facts: Mapped[Optional[List[str]]] = mapped_column(JSON, nullable=True)  
     films: Mapped[Optional[List[dict]]] = mapped_column(JSON, nullable=True)  
 
-    # Страна (можно выделить из birthplace или добавить отдельно)
+    # Страна
     country: Mapped[Optional[str]] = mapped_column(String, nullable=True)      
+
+    search_vector = Column(TSVECTOR, nullable=True)
+    
+    __table_args__ = (
+        Index('idx_actor_search_vector', 'search_vector', postgresql_using='gin'),
+    )
 
 class MovieActor(DeclarativeBaseModel):
     __tablename__ = "movie_actors"

@@ -1,0 +1,90 @@
+services:
+  # Backend сервис
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    container_name: movierec-api
+    ports:
+      - "8000:8000"
+    environment:
+      # Проект
+      - PROJECT_NAME=${PROJECT_NAME:-MovieRec API}
+      - DEBUG=${DEBUG:-True}
+      - VERSION=${VERSION:-1.0}
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS:-["*"]}
+      - API_KEY=${API_KEY:-}
+      
+      # База данных
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_HOST=db
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_PORT=${POSTGRES_PORT:-5432}
+      - POSTGRES_ECHO_LOG=${POSTGRES_ECHO_LOG:-False}
+      - DATABASE_URL_SYNC=postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      
+      # JWT
+      - SECRET_KEY=${SECRET_KEY}
+      - ALGORITHM=${ALGORITHM}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES}
+      - REFRESH_TOKEN_EXPIRE_DAYS=${REFRESH_TOKEN_EXPIRE_DAYS}
+    volumes:
+      - ./backend/src:/app/src
+      - ./alembic:/app/alembic
+      - ./alembic.ini:/app/alembic.ini
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - movierec-network
+
+  # PostgreSQL база данных
+  db:
+    image: postgres:16-alpine
+    container_name: movierec-db
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - movierec-network
+
+  minio:
+    image: minio/minio
+    container_name: movierec-minio
+    ports:
+      - "9000:9000"   
+      - "9001:9001"   
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    volumes:
+      - minio_data:/data
+    command: server --console-address ":9001" /data
+    restart: unless-stopped
+    networks:
+      - movierec-network
+
+volumes:
+  minio_data:
+    driver: local
+  postgres_data:
+    driver: local
+
+
+networks:
+  movierec-network:
+    driver: bridge
+    

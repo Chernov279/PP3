@@ -1,5 +1,7 @@
 from datetime import datetime
-from typing import Optional
+from typing import List, Optional
+
+from pydantic import EmailStr, Field, field_validator
 
 from backend.src.config import settings
 from backend.src.models.models import User
@@ -12,8 +14,34 @@ class UserBaseSchema(BaseSchema):
 
 
 class AuthLoginIn(UserBaseSchema):
-    email: str
-    password: str
+    email: EmailStr = Field(..., examples=["new-user@example.com"])
+    password: str = Field(default="String123!")
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, v: str) -> str:
+        errors: List[str] = []
+
+        # Проверка минимальной длины
+        if len(v) < 8:
+            errors.append("Пароль должен содержать минимум 8 символов")
+
+        # Проверка наличия цифры
+        if not any(char.isdigit() for char in v):
+            errors.append("Пароль должен содержать хотя бы одну цифру")
+
+        # Проверка наличия спецсимвола
+        if not any(char in "!@#$%^&*()_+-=[]{}|;:,.<>?" for char in v):
+            errors.append("Пароль должен содержать хотя бы один специальный символ (!@#$%^&*...)")
+
+        # Проверка наличия буквы верхнего регистра (рекомендация)
+        if not any(char.isupper() for char in v):
+            errors.append("Пароль должен содержать хотя бы одну заглавную букву")
+
+        if errors:
+            raise ValueError("; ".join(errors))
+
+        return v
 
 
 class AuthRegisterIn(AuthLoginIn):
