@@ -1,73 +1,149 @@
-# React + TypeScript + Vite
+# КиноРек — Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Клиентская часть сервиса персональных рекомендаций фильмов. Работает поверх готового FastAPI-бэкенда.
 
-Currently, two official plugins are available:
+> **Локально:** `http://localhost:3000` (dev) | **Docker:** `http://localhost:3000` | **API:** `http://localhost:8000/docs`
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+## Описание
 
-## React Compiler
+SPA на React + TypeScript + Vite. Пользователь авторизуется, подключает Кинопоиск, настраивает веса рекомендаций, управляет избранным (фильмы, жанры, персоны), загружает аватар и ищет контент через единый поиск.
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+## Технологический стек
 
-## Expanding the ESLint configuration
+| Компонент | Технология |
+| :--- | :--- |
+| **UI** | React 18, TypeScript |
+| **Сборка** | Vite 6 |
+| **Стили** | Tailwind CSS 4, shadcn/ui (Radix) |
+| **Тема** | next-themes (светлая / тёмная) |
+| **HTTP** | fetch + JWT (access / refresh) |
+| **DevOps** | Docker (nginx), переменная `VITE_API_BASE_URL` |
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+## Быстрый старт
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+### Разработка (бэкенд в Docker)
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+```bash
+# из корня репозитория
+docker compose up -d
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+cd frontend
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+Создайте в корне проекта `.env` (если ещё нет) и для фронта укажите:
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
-
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```env
+VITE_API_BASE_URL=http://localhost:8000
 ```
+
+### Полный стек в Docker
+
+```bash
+docker compose up -d --build
+```
+
+- Frontend: http://localhost:3000  
+- API: http://localhost:8000  
+- MinIO Console: http://localhost:9001  
+
+## Соответствие API бэкенда
+
+| Модуль бэкенда | Экран / компонент |
+| :--- | :--- |
+| Auth (login, register, refresh) | `AuthDialog`, `AuthContext` |
+| Users `/users/me`, avatar | `AccountPage`, `ProfileAvatar`, `Header` |
+| Films, recommendations | `MovieCatalog`, `MovieDetailsDialog` |
+| Genres favorite | вкладка «Жанры» в `AccountPage` |
+| Persons search / favorite | `SearchDialog`, вкладка «Актёры», `PersonCard` |
+| Kinopoisk sync | диалог подключения в профиле |
+
+---
+
+## Task Tracker & Sprint Plan
+
+### Sprint 1 — MVP интерфейса
+
+*Цель: показать сквозной сценарий «вход → профиль → рекомендации».*
+
+**Реализовано:**
+- [x] **Auth UI:** регистрация, вход, хранение JWT, авто-refresh.
+- [x] **Каталог:** рекомендации с фильтрами (популярность, персонализация, год, жанры).
+- [x] **Профиль:** вкладки подключений, просмотрено, избранное, жанры.
+- [x] **Карточки фильмов:** `MovieCard`, детали в модальном окне.
+
+**Отчёт:**
+- Plan vs Fact: 4 / 4.
+- Блокеры: без синхронизации Кинопоиска рекомендации недоступны (ожидаемое поведение API).
+
+---
+
+### Sprint 2 — Избранное и поиск
+
+*Цель: закрыть пользовательские списки и поиск по каталогу.*
+
+**Реализовано:**
+- [x] **Избранные фильмы:** добавление / удаление из карточки и синхронизация с `/films/favorite`.
+- [x] **Любимые жанры:** CRUD через `/genres/favorite`.
+- [x] **Поиск фильмов:** `/films/search` в `SearchDialog`.
+- [x] **История просмотров:** `/users/{id}/films` на вкладке «Просмотрено».
+
+**Отчёт:**
+- Plan vs Fact: 4 / 4.
+- План на Sprint 3: медиа-профиль (аватар) и персоны.
+
+---
+
+### Sprint 3 — Аватар, тема, Docker
+
+*Цель: визуальная персонализация и деплой UI рядом с API.*
+
+**Реализовано:**
+- [x] **Аватар:** загрузка и удаление (`POST/DELETE /users/me/avatar`), отображение в шапке и профиле.
+- [x] **Тема:** переключатель светлая / тёмная (`next-themes`, класс `.dark` на `<html>`).
+- [x] **Docker:** `frontend/Dockerfile`, nginx, сервис `frontend` в `docker-compose.yml`.
+- [x] **Toasts:** уведомления через `sonner` с учётом темы.
+
+**Отчёт:**
+- Plan vs Fact: 4 / 4.
+- Примечание: URL аватаров отдаёт MinIO (`MINIO_PUBLIC_URL` на бэкенде, обычно `http://localhost:9000`).
+
+---
+
+### Sprint 4 — Персоны как карточки
+
+*Цель: паритет с бэкенд-модулем Persons.*
+
+**Реализовано:**
+- [x] **PersonCard** — карточки персон по аналогии с фильмами.
+- [x] **Поиск персон:** `/persons/search` во вкладке поиска.
+- [x] **Избранные актёры:** сетка карточек + удаление через `/persons/favorite/{id}`.
+- [x] **PersonDetailsDialog:** детали персоны и избранное.
+
+**Отчёт:**
+- Plan vs Fact: 4 / 4.
+- План на следующий спринт (идеи): коллекции пользователя, пагинация списков, E2E-тесты.
+
+---
+
+## Структура (основное)
+
+```
+frontend/
+├── src/
+│   ├── components/     # UI и страницы
+│   ├── contexts/       # AuthContext
+│   ├── hooks/          # useApi
+│   ├── services/api.ts # клиент REST API
+│   └── types/          # Movie, Person, auth
+├── Dockerfile
+└── nginx.conf
+```
+
+## Скрипты
+
+| Команда | Описание |
+| :--- | :--- |
+| `npm run dev` | Dev-сервер на порту 3000 |
+| `npm run build` | Production-сборка в `build/` |

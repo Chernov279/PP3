@@ -2,6 +2,96 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@property --background {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #ffffff;
+}
+
+@property --foreground {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #171717;
+}
+
+@property --card {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #ffffff;
+}
+
+@property --card-foreground {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #171717;
+}
+
+@property --popover {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #ffffff;
+}
+
+@property --popover-foreground {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #171717;
+}
+
+@property --primary {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #030213;
+}
+
+@property --primary-foreground {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #ffffff;
+}
+
+@property --secondary {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #f2f2f4;
+}
+
+@property --secondary-foreground {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #030213;
+}
+
+@property --muted {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #ececf0;
+}
+
+@property --muted-foreground {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #717182;
+}
+
+@property --accent {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #e9ebef;
+}
+
+@property --accent-foreground {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #030213;
+}
+
+@property --border {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #e5e5e5;
+}
+
 :root {
   --font-size: 16px;
   --background: #ffffff;
@@ -126,9 +216,60 @@
     @apply border-border outline-ring/50;
   }
 
+  html {
+    color-scheme: light;
+  }
+
+  html.dark {
+    color-scheme: dark;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      transition:
+        background-color 0.45s ease,
+        color 0.45s ease,
+        border-color 0.45s ease;
+    }
+
+    body,
+    header,
+    [data-slot="card"],
+    [data-slot="dialog-content"],
+    [data-slot="dialog-overlay"] {
+      transition:
+        background-color 0.45s ease,
+        color 0.45s ease,
+        border-color 0.45s ease,
+        box-shadow 0.45s ease;
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    ::view-transition-old(root),
+    ::view-transition-new(root) {
+      animation: none !important;
+    }
+  }
+
   body {
     @apply bg-background text-foreground;
   }
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation-duration: 0.45s;
+  animation-timing-function: ease-in-out;
+}
+
+@utility scrollbar-hidden {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  display: none;
 }
 
 /**

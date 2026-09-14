@@ -16,6 +16,7 @@ interface MovieDetailsDialogProps {
   onOpenChange: (open: boolean) => void;
   isFavorite: boolean;
   onToggleFavorite: () => void;
+  onOpenMovie?: (movie: Movie) => void;
 }
 
 export function MovieDetailsDialog({ 
@@ -23,7 +24,8 @@ export function MovieDetailsDialog({
   open, 
   onOpenChange, 
   isFavorite, 
-  onToggleFavorite 
+  onToggleFavorite,
+  onOpenMovie,
 }: MovieDetailsDialogProps) {
   const { isAuthenticated } = useAuth();
 
@@ -49,10 +51,11 @@ export function MovieDetailsDialog({
   };
 
   const handleSimilarMovieClick = (similarMovie: Movie) => {
-    onOpenChange(false);
-    setTimeout(() => {
-      toast.info(`Открыт фильм: ${similarMovie.titleRu || similarMovie.title}`);
-    }, 300);
+    if (onOpenMovie) {
+      onOpenMovie(similarMovie);
+      return;
+    }
+    toast.info(`Открыт фильм: ${similarMovie.titleRu || similarMovie.title}`);
   };
 
   return (
