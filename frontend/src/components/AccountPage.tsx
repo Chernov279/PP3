@@ -237,15 +237,17 @@ export function AccountPage({
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="max-w-4xl mx-auto">
-        <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
-          <div className="space-y-4">
-            {user && (
+        <div className="mb-8">
+          {user && (
+            <div className="mb-6">
               <ProfileAvatar
                 name={user.name}
                 avatarUrl={user.avatar_url}
                 onAvatarChange={updateAvatar}
               />
-            )}
+            </div>
+          )}
+          <div className="flex items-start justify-between gap-4">
             <div>
               <h1>Мой аккаунт</h1>
               {user && (
@@ -254,10 +256,10 @@ export function AccountPage({
                 </p>
               )}
             </div>
+            <Button variant="outline" className="mt-1 shrink-0" onClick={onBack}>
+              Назад к рекомендациям
+            </Button>
           </div>
-          <Button variant="outline" onClick={onBack}>
-            Назад к рекомендациям
-          </Button>
         </div>
 
         <Tabs defaultValue="connections" className="w-full">

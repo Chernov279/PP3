@@ -56,7 +56,7 @@ export function SearchDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl max-h-[90vh]">
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-hidden flex flex-col scrollbar-hidden">
         <DialogHeader>
           <DialogTitle>Поиск</DialogTitle>
           <DialogDescription>
@@ -70,7 +70,7 @@ export function SearchDialog({
             <TabsTrigger value="persons">Актёры и режиссёры</TabsTrigger>
           </TabsList>
 
-          <TabsContent value={tab} className="space-y-4 mt-4">
+          <TabsContent value={tab} className="space-y-4 mt-4 min-h-0 overflow-hidden">
             <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
               <Input
@@ -86,7 +86,7 @@ export function SearchDialog({
               />
             </div>
 
-            <div className="overflow-y-auto max-h-[60vh]">
+            <div className="overflow-y-auto max-h-[60vh] pr-1 scrollbar-hidden">
               {loading && (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -95,11 +95,12 @@ export function SearchDialog({
               )}
 
               {!loading && tab === "films" && filmResults && filmResults.length > 0 && (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   {filmResults.map((movie) => (
                     <MovieCard
                       key={movie.id}
                       movie={movie}
+                      compact
                       onClick={() => {
                         onMovieClick(movie);
                         onOpenChange(false);
@@ -111,11 +112,12 @@ export function SearchDialog({
               )}
 
               {!loading && tab === "persons" && personResults && personResults.length > 0 && (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                <div className="grid grid-cols-2 gap-4">
                   {personResults.map((person) => (
                     <PersonCard
                       key={person.id}
                       person={person}
+                      compact
                       onClick={() => {
                         onPersonClick(person);
                         onOpenChange(false);

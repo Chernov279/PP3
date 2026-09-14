@@ -5,9 +5,10 @@ import { Person } from "../types/movie";
 interface PersonCardProps {
   person: Person;
   onClick?: () => void;
+  compact?: boolean;
 }
 
-export function PersonCard({ person, onClick }: PersonCardProps) {
+export function PersonCard({ person, onClick, compact = false }: PersonCardProps) {
   const displayName =
     person.name_ru || person.name_en || `Персона #${person.id}`;
 
@@ -32,10 +33,12 @@ export function PersonCard({ person, onClick }: PersonCardProps) {
           </span>
         )}
       </div>
-      <CardContent className="p-4">
-        <h3 className="mb-1 line-clamp-2">{displayName}</h3>
+      <CardContent className={compact ? "p-3" : "p-4"}>
+        <h3 className={`mb-1 line-clamp-2 ${compact ? "text-sm leading-snug" : ""}`}>
+          {displayName}
+        </h3>
         {person.profession && (
-          <Badge variant="secondary" className="line-clamp-1">
+          <Badge variant="secondary" className="max-w-full truncate">
             {person.profession}
           </Badge>
         )}

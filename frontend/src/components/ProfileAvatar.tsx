@@ -65,12 +65,15 @@ export function ProfileAvatar({
   };
 
   return (
-    <div className="flex items-center gap-4">
-      <Avatar className="h-20 w-20">
-        <AvatarImage src={avatarUrl ?? undefined} alt={name} />
-        <AvatarFallback className="text-lg">{initials || "?"}</AvatarFallback>
-      </Avatar>
-      <div className="flex flex-wrap gap-2">
+    <div className="flex flex-col items-center gap-4">
+      <div className="relative">
+        <div className="absolute -inset-1 rounded-full bg-gradient-to-br from-primary/40 via-primary/10 to-transparent blur-sm" />
+        <Avatar className="relative h-28 w-28 ring-4 ring-background shadow-xl">
+          <AvatarImage src={avatarUrl ?? undefined} alt={name} />
+          <AvatarFallback className="text-2xl">{initials || "?"}</AvatarFallback>
+        </Avatar>
+      </div>
+      <div className="flex flex-wrap justify-center gap-2">
         <input
           ref={inputRef}
           type="file"
