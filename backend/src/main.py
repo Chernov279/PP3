@@ -14,8 +14,9 @@ from backend.src.api.users.router import user
 from backend.src.api.persons.router import persons
 from backend.src.api.genres.router import genres
 from backend.src.api.healthcheck.router import health
+from backend.src.api.collections.router import collections
 
-routers = [auth, user, films, recommendations, persons, genres, health]
+routers = [auth, user, films, recommendations, persons, genres, health, collections]
 
 
 # configure_logging(level="INFO")
