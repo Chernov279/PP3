@@ -20,6 +20,8 @@ import {
 import { Plus, Trash2, Link as LinkIcon, Loader2 } from "lucide-react";
 import { Movie, Person, UserProfile } from "../types/movie";
 import { MovieCard } from "./MovieCard";
+import { PersonCard } from "./PersonCard";
+import { ProfileAvatar } from "./ProfileAvatar";
 import { useAuth } from "../contexts/AuthContext";
 import { userService, movieService, genreService, personService } from "../services/api";
 import { useApi } from "../hooks/useApi";
@@ -29,6 +31,7 @@ interface AccountPageProps {
   profile: UserProfile;
   onUpdateProfile: (profile: UserProfile) => void;
   onMovieClick: (movie: Movie) => void;
+  onPersonClick: (person: Person) => void;
   onBack: () => void;
 }
 
@@ -36,9 +39,10 @@ export function AccountPage({
   profile,
   onUpdateProfile,
   onMovieClick,
+  onPersonClick,
   onBack,
 }: AccountPageProps) {
-  const { user } = useAuth();
+  const { user, updateAvatar } = useAuth();
   const [newActor, setNewActor] = useState("");
   const [isSearchingActor, setIsSearchingActor] = useState(false);
   const [actorSuggestions, setActorSuggestions] = useState<Person[]>([]);
@@ -180,19 +184,16 @@ export function AccountPage({
     }
   };
 
-  const handleRemoveActor = async (actor: string) => {
+  const handleRemoveActor = async (person: Person) => {
     try {
-      const results = await personService.search(actor, 1);
-      if (results.length) {
-        await personService.removeFavorite(results[0].id);
-      }
+      await personService.removeFavorite(person.id);
+      const displayName = person.name_ru || person.name_en || `ID ${person.id}`;
       onUpdateProfile({
         ...profile,
-        favoriteActors: profile.favoriteActors.filter(
-          (a) => a !== actor,
-        ),
+        favoriteActors: profile.favoriteActors.filter((a) => a !== displayName),
       });
       await refetchFavoritePersons();
+      toast.success("Актёр удалён из избранного");
     } catch (e) {
       console.error(e);
       toast.error("Не удалось удалить актёра из избранного");
@@ -236,14 +237,23 @@ export function AccountPage({
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="max-w-4xl mx-auto">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1>Мой аккаунт</h1>
+        <div className="flex items-center justify-between mb-6 gap-4 flex-wrap">
+          <div className="space-y-4">
             {user && (
-              <p className="text-muted-foreground mt-1">
-                {user.name} • {user.email}
-              </p>
+              <ProfileAvatar
+                name={user.name}
+                avatarUrl={user.avatar_url}
+                onAvatarChange={updateAvatar}
+              />
             )}
+            <div>
+              <h1>Мой аккаунт</h1>
+              {user && (
+                <p className="text-muted-foreground mt-1">
+                  {user.name} • {user.email}
+                </p>
+              )}
+            </div>
           </div>
           <Button variant="outline" onClick={onBack}>
             Назад к рекомендациям
@@ -542,43 +552,41 @@ export function AccountPage({
                     {actorSuggestions.length > 0 && (
                       <div className="space-y-1">
                         {actorSuggestions.map((person) => (
-                          <Button
-                            key={person.id}
-                            variant="ghost"
-                            size="sm"
-                            className="w-full justify-start"
-                            onClick={() => handleSelectActor(person)}
-                          >
-                            {person.name_ru || person.name_en || `ID ${person.id}`}
-                          </Button>
+                          <div key={person.id} className="max-w-[200px]">
+                            <PersonCard
+                              person={person}
+                              onClick={() => handleSelectActor(person)}
+                            />
+                          </div>
                         ))}
                       </div>
                     )}
                   </div>
                 </div>
 
-                <div className="flex flex-wrap gap-2">
-                  {(profile.favoriteActors || []).map((actor) => (
-                     <Badge
-                      key={actor}
-                      variant="secondary"
-                      className="gap-2"
-                    >
-                      {actor}
-                      <button
-                        onClick={() => handleRemoveActor(actor)}
-                        className="ml-1 hover:text-destructive"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                    </Badge>
-                  ))}
-                  {(profile.favoriteActors || []).length === 0 && (
-                    <p className="text-muted-foreground">
-                      Актёры не добавлены
-                    </p>
-                  )}
-                </div>
+                {(favoritePersonsRaw || []).length > 0 ? (
+                  <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {(favoritePersonsRaw || []).map((person) => (
+                      <div key={person.id} className="relative group">
+                        <PersonCard
+                          person={person}
+                          onClick={() => onPersonClick(person)}
+                        />
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="icon"
+                          className="absolute top-2 right-2 h-8 w-8 opacity-90"
+                          onClick={() => handleRemoveActor(person)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground">Актёры не добавлены</p>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

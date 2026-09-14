@@ -1,7 +1,7 @@
 // src/contexts/AuthContext.tsx
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { UserProfile } from '../types/movie';
-import { authService, getAccessToken, clearTokens, setTokens } from '../services/api';
+import { authService, getAccessToken, clearTokens, setTokens, userService } from '../services/api';
 import { UserResponse } from '../types/auth';
 
 interface User extends UserResponse {
@@ -15,6 +15,7 @@ interface AuthContextType {
   register: (email: string, password: string, name: string) => Promise<boolean>;
   logout: () => void;
   updateUserProfile: (profile: UserProfile) => Promise<void>;
+  updateAvatar: (avatarUrl: string | null) => void;
   refreshProfile: () => Promise<void>;
   loading: boolean;
 }
@@ -79,10 +80,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // We should handle that gracefully.
       const userData = await authService.getMe();
 
+      let favoriteMovieIds: number[] = [];
+      try {
+        const favorites = await userService.getFavorites("me");
+        favoriteMovieIds = favorites.map((m) => m.id);
+      } catch {
+        favoriteMovieIds = loadStoredProfile().favoriteMovies;
+      }
+
       // Базовый профиль: либо из localStorage, либо дефолтный.
       const storedProfile = loadStoredProfile();
       const mergedProfile: UserProfile = {
         ...storedProfile,
+        favoriteMovies: favoriteMovieIds,
         is_kinopoisk_synchronized:
           userData.is_kinopoisk_synchronized ?? storedProfile.is_kinopoisk_synchronized,
       };
@@ -149,6 +159,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     storeProfile(profile);
   };
 
+  const updateAvatar = (avatarUrl: string | null) => {
+    setUser((prev) => (prev ? { ...prev, avatar_url: avatarUrl } : null));
+  };
+
   const value: AuthContextType = {
     user,
     isAuthenticated: !!user,
@@ -156,6 +170,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     register,
     logout,
     updateUserProfile,
+    updateAvatar,
     refreshProfile: fetchUser,
     loading
   };

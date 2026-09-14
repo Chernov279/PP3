@@ -21,4 +21,6 @@ export interface UserResponse {
   email: string;
   name: string;
   is_kinopoisk_synchronized?: boolean;
+  avatar_url?: string | null;
+  created_at?: string;
 }

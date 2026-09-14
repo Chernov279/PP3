@@ -115,6 +115,58 @@ function normalizeMovieFromWatchHistory(item: BackendWatchHistoryItem): Movie {
   };
 }
 
+type BackendSearchFilm = {
+  filmId: number;
+  nameRu?: string | null;
+  nameEn?: string | null;
+  nameOriginal?: string | null;
+  year?: number | null;
+  rating?: number | null;
+  posterUrl?: string | null;
+  posterUrlPreview?: string | null;
+};
+
+type BackendActor = {
+  id: number;
+  name_ru?: string | null;
+  name_en?: string | null;
+  poster_url?: string | null;
+  profession?: string | null;
+};
+
+function normalizePerson(raw: BackendActor | Record<string, unknown>): Person {
+  const p = raw as BackendActor & {
+    kinopoiskId?: number;
+    personId?: number;
+    nameRu?: string;
+    nameEn?: string;
+    posterUrl?: string;
+  };
+  return {
+    id: p.id ?? p.kinopoiskId ?? p.personId ?? 0,
+    name_ru: p.name_ru ?? p.nameRu ?? null,
+    name_en: p.name_en ?? p.nameEn ?? null,
+    poster_url: p.poster_url ?? p.posterUrl ?? null,
+    profession: p.profession ?? null,
+  };
+}
+
+function normalizeMovieFromSearch(f: BackendSearchFilm): Movie {
+  return {
+    id: f.filmId,
+    title: f.nameRu || f.nameEn || f.nameOriginal || `Фильм ${f.filmId}`,
+    year: f.year ?? 0,
+    genres: [],
+    rating: Number(f.rating ?? 0),
+    popularity: 0,
+    description: "",
+    poster: f.posterUrl || f.posterUrlPreview || "",
+    actors: [],
+    director: "",
+    playerUrl: "",
+  };
+}
+
 function normalizeMovieFromFilm(f: BackendFilm): Movie {
   const year =
     typeof f.release_date === "string" && f.release_date.length >= 4
@@ -158,15 +210,24 @@ interface ApiError {
   detail: string | { msg: string }[];
 }
 
+function buildAuthHeaders(
+  options: RequestInit,
+  token: string | null
+): Record<string, string> {
+  const isFormData =
+    typeof FormData !== "undefined" && options.body instanceof FormData;
+  return {
+    ...(isFormData ? {} : { "Content-Type": "application/json" }),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(options.headers as Record<string, string> | undefined),
+  };
+}
+
 async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${API_BASE_URL}${endpoint}`;
   const token = getAccessToken();
 
-  const headers = {
-    "Content-Type": "application/json",
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-    ...options.headers,
-  };
+  let headers = buildAuthHeaders(options, token);
 
   let response = await fetch(url, { ...options, headers });
 
@@ -185,7 +246,10 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
         if (refreshResponse.ok) {
           const data: TokenResponse = await refreshResponse.json();
           setTokens(data.access_token, data.refresh_token);
-          headers["Authorization"] = `Bearer ${data.access_token}`;
+          headers = {
+            ...buildAuthHeaders(options, data.access_token),
+            Authorization: `Bearer ${data.access_token}`,
+          };
           response = await fetch(url, { ...options, headers });
         } else {
           clearTokens();
@@ -296,9 +360,14 @@ export const movieService = {
     return apiRequest<Genre[]>(`/films/${filmId}/genres`);
   },
 
-  async searchFilms(_query: string): Promise<Movie[]> {
-    return [];
-  }
+  async searchFilms(query: string, page = 1): Promise<Movie[]> {
+    const params = new URLSearchParams({
+      q: query,
+      page: String(page),
+    });
+    const raw = await apiRequest<BackendSearchFilm[]>(`/films/search?${params.toString()}`);
+    return raw.map(normalizeMovieFromSearch);
+  },
 };
 
 export const userService = {
@@ -333,6 +402,21 @@ export const userService = {
     return { success: true };
   },
   
+  async uploadAvatar(file: File): Promise<string> {
+    const formData = new FormData();
+    formData.append("file", file);
+    const result = await apiRequest<string | { url?: string }>("/users/me/avatar", {
+      method: "POST",
+      body: formData,
+    });
+    if (typeof result === "string") return result;
+    return result.url ?? "";
+  },
+
+  async deleteAvatar(): Promise<void> {
+    await apiRequest<unknown>("/users/me/avatar", { method: "DELETE" });
+  },
+
   async getWatched(userId: string | number = "me"): Promise<Movie[]> {
     // Если userId = "me", нам возможно нужно получить id из контекста.
     // Но бэкенд может принимать и "me", либо мы просто передаем id. 
@@ -367,16 +451,15 @@ export const personService = {
         profession?: string | null;
       }[]
     >(`/persons/search?${params.toString()}`);
-    return raw.map((p) => ({
-      id: p.kinopoiskId,
-      name_ru: p.nameRu,
-      name_en: p.nameEn,
-      poster_url: p.posterUrl,
-      profession: p.profession,
-    }));
+    return raw.map((p) => normalizePerson(p));
+  },
+  async getById(personId: number): Promise<Person> {
+    const raw = await apiRequest<BackendActor>(`/persons/${personId}`);
+    return normalizePerson(raw);
   },
   async getFavorites(): Promise<Person[]> {
-    return apiRequest<Person[]>("/persons/favorite");
+    const raw = await apiRequest<BackendActor[]>("/persons/favorite");
+    return raw.map((p) => normalizePerson(p));
   },
   async addFavorite(personId: number): Promise<boolean> {
     return apiRequest<boolean>(`/persons/favorite/${personId}`, { method: "POST" });

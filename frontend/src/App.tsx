@@ -5,7 +5,9 @@ import { AccountPage } from "./components/AccountPage";
 import { SearchDialog } from "./components/SearchDialog";
 import { MovieDetailsDialog } from "./components/MovieDetailsDialog";
 import { AuthDialog } from "./components/AuthDialog";
-import { Genre, Movie } from "./types/movie";
+import { Genre, Movie, Person } from "./types/movie";
+import { PersonDetailsDialog } from "./components/PersonDetailsDialog";
+import { personService } from "./services/api";
 import { useAuth, AuthProvider } from "./contexts/AuthContext";
 import { toast } from "sonner";
 import { movieService, userService } from "./services/api";
@@ -22,6 +24,9 @@ function AppContent() {
   const [isMovieDialogOpen, setIsMovieDialogOpen] = useState(false);
   const [isSearchOpen, setIsSearchOpen] = useState(false);
   const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false);
+  const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
+  const [isPersonDialogOpen, setIsPersonDialogOpen] = useState(false);
+  const [favoritePersonIds, setFavoritePersonIds] = useState<number[]>([]);
   
   // Состояния для фильтров
   const [popularityWeight, setPopularityWeight] = useState<number[]>([50]);
@@ -54,6 +59,11 @@ function AppContent() {
   useEffect(() => {
     if (isAuthenticated) {
       refetchGenres();
+      personService.getFavorites().then((persons) => {
+        setFavoritePersonIds(persons.map((p) => p.id));
+      }).catch(() => setFavoritePersonIds([]));
+    } else {
+      setFavoritePersonIds([]);
     }
   }, [isAuthenticated, refetchGenres]);
 
@@ -98,9 +108,41 @@ function AppContent() {
     }
   }, [fetchRecommendations, shouldFetchRecommendations, refetchMovies]);
 
-  const handleMovieClick = (movie: Movie) => {
-    setSelectedMovie(movie);
+  const handleMovieClick = async (movie: Movie) => {
+    try {
+      const [details, genres] = await Promise.all([
+        movieService.getFilmDetails(movie.id),
+        movieService.getFilmGenres(movie.id).catch(() => [] as Genre[]),
+      ]);
+      setSelectedMovie({ ...details, genres: genres.length ? genres : movie.genres });
+    } catch {
+      setSelectedMovie(movie);
+    }
     setIsMovieDialogOpen(true);
+  };
+
+  const handlePersonClick = (person: Person) => {
+    setSelectedPerson(person);
+    setIsPersonDialogOpen(true);
+  };
+
+  const handleTogglePersonFavorite = async () => {
+    if (!selectedPerson || !isAuthenticated) return;
+    const isFavorite = favoritePersonIds.includes(selectedPerson.id);
+    try {
+      if (isFavorite) {
+        await personService.removeFavorite(selectedPerson.id);
+        setFavoritePersonIds((prev) => prev.filter((id) => id !== selectedPerson.id));
+        toast.success("Удалено из избранных персон");
+      } else {
+        await personService.addFavorite(selectedPerson.id);
+        setFavoritePersonIds((prev) => [...prev, selectedPerson.id]);
+        toast.success("Добавлено в избранные персоны");
+      }
+    } catch (e) {
+      console.error(e);
+      toast.error("Не удалось обновить избранное");
+    }
   };
 
   const handleToggleFavorite = async () => {
@@ -164,6 +206,7 @@ function AppContent() {
         onLoginClick={() => setIsAuthDialogOpen(true)}
         isAuthenticated={isAuthenticated}
         userName={user?.name}
+        avatarUrl={user?.avatar_url}
         onLogout={handleLogout}
       />
 
@@ -223,6 +266,7 @@ function AppContent() {
               profile={userProfile}
               onUpdateProfile={updateUserProfile}
               onMovieClick={handleMovieClick}
+              onPersonClick={handlePersonClick}
               onBack={() => setCurrentView("catalog")}
             />
           )}
@@ -233,6 +277,7 @@ function AppContent() {
         open={isSearchOpen}
         onOpenChange={setIsSearchOpen}
         onMovieClick={handleMovieClick}
+        onPersonClick={handlePersonClick}
       />
 
       <MovieDetailsDialog
@@ -241,6 +286,15 @@ function AppContent() {
         onOpenChange={setIsMovieDialogOpen}
         isFavorite={isFavorite}
         onToggleFavorite={handleToggleFavorite}
+        onOpenMovie={handleMovieClick}
+      />
+
+      <PersonDetailsDialog
+        person={selectedPerson}
+        open={isPersonDialogOpen}
+        onOpenChange={setIsPersonDialogOpen}
+        isFavorite={selectedPerson ? favoritePersonIds.includes(selectedPerson.id) : false}
+        onToggleFavorite={handleTogglePersonFavorite}
       />
 
       <AuthDialog
