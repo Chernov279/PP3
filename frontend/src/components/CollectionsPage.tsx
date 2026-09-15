@@ -70,9 +70,10 @@ export function CollectionsPage({
   const [addingMovieId, setAddingMovieId] = useState<number | null>(null);
 
   const isOwner = Boolean(detail && currentUserId && detail.user_id === currentUserId);
+  const hasDetail = Boolean(detail);
 
   useEffect(() => {
-    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    const timer = window.setTimeout(() => setDebouncedSearch(search.trim()), 400);
     return () => window.clearTimeout(timer);
   }, [search]);
 
@@ -98,8 +99,43 @@ export function CollectionsPage({
   }, [tab, page, debouncedSearch]);
 
   useEffect(() => {
+    if (hasDetail) return;
     loadList();
-  }, [loadList]);
+  }, [loadList, hasDetail]);
+
+  const existingMovieIds = (detail?.movies || []).map((m) => m.id).join(",");
+
+  useEffect(() => {
+    const trimmed = movieQuery.trim();
+    if (!hasDetail || trimmed.length < 2) {
+      setMovieResults([]);
+      setMovieSearching(false);
+      return;
+    }
+
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      setMovieSearching(true);
+      try {
+        const results = await movieService.searchFilms(trimmed, 1);
+        if (cancelled) return;
+        const existing = new Set(existingMovieIds.split(",").filter(Boolean).map(Number));
+        setMovieResults(results.filter((m) => !existing.has(m.id)).slice(0, 8));
+      } catch (e) {
+        if (!cancelled) {
+          console.error(e);
+          setMovieResults([]);
+        }
+      } finally {
+        if (!cancelled) setMovieSearching(false);
+      }
+    }, 400);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [movieQuery, hasDetail, existingMovieIds]);
 
   const openDetail = useCallback(async (collectionId: number) => {
     setDetailLoading(true);
@@ -180,26 +216,6 @@ export function CollectionsPage({
     }
   };
 
-  const searchCatalogMovies = async (query: string) => {
-    setMovieQuery(query);
-    const trimmed = query.trim();
-    if (trimmed.length < 2) {
-      setMovieResults([]);
-      return;
-    }
-    setMovieSearching(true);
-    try {
-      const results = await movieService.searchFilmsInDb(trimmed, 1, 8);
-      const existing = new Set((detail?.movies || []).map((m) => m.id));
-      setMovieResults(results.filter((m) => !existing.has(m.id)));
-    } catch (e) {
-      console.error(e);
-      setMovieResults([]);
-    } finally {
-      setMovieSearching(false);
-    }
-  };
-
   const handleAddMovie = async (movie: Movie) => {
     if (!detail) return;
     setAddingMovieId(movie.id);
@@ -213,8 +229,6 @@ export function CollectionsPage({
       const message = e instanceof Error ? e.message : "";
       if (message.toLowerCase().includes("already")) {
         toast.info("Этот фильм уже в коллекции");
-      } else if (message.toLowerCase().includes("not found")) {
-        toast.error("Фильм не найден в каталоге сервиса");
       } else {
         toast.error(message || "Не удалось добавить фильм");
       }
@@ -237,9 +251,9 @@ export function CollectionsPage({
   };
 
   const filteredMine =
-    tab === "mine" && search.trim()
+    tab === "mine" && debouncedSearch
       ? items.filter((c) => {
-          const q = search.trim().toLowerCase();
+          const q = debouncedSearch.toLowerCase();
           return (
             c.title.toLowerCase().includes(q) ||
             (c.description || "").toLowerCase().includes(q)
@@ -308,7 +322,7 @@ export function CollectionsPage({
                 className="pl-9"
                 placeholder="Начните вводить название..."
                 value={movieQuery}
-                onChange={(e) => searchCatalogMovies(e.target.value)}
+                onChange={(e) => setMovieQuery(e.target.value)}
               />
             </div>
             {movieSearching && (
@@ -346,7 +360,7 @@ export function CollectionsPage({
             )}
             {movieQuery.trim().length >= 2 && !movieSearching && movieResults.length === 0 && (
               <p className="text-sm text-muted-foreground">
-                В каталоге сервиса ничего не найдено. Добавлять можно фильмы, которые уже есть в базе.
+                Ничего не найдено по запросу «{movieQuery.trim()}»
               </p>
             )}
           </div>
@@ -441,6 +455,7 @@ export function CollectionsPage({
           setTab(value as "mine" | "public");
           setPage(1);
           setSearch("");
+          setDebouncedSearch("");
         }}
         className="mb-6"
       >
@@ -456,10 +471,7 @@ export function CollectionsPage({
           className="pl-9"
           placeholder={tab === "mine" ? "Найти среди своих" : "Поиск публичных коллекций"}
           value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-          }}
+          onChange={(e) => setSearch(e.target.value)}
         />
       </div>
 
@@ -499,7 +511,7 @@ export function CollectionsPage({
               </Button>
             </div>
           )}
-          {tab === "mine" && !search.trim() && totalPages > 1 && (
+          {tab === "mine" && !debouncedSearch && totalPages > 1 && (
             <div className="flex items-center justify-center gap-3 mt-8">
               <Button variant="outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
                 Назад

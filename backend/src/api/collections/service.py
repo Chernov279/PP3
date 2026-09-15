@@ -1,3 +1,5 @@
+from datetime import date
+
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -9,6 +11,7 @@ from backend.src.api.collections.schemas import (
 from backend.src.models.collection_movie import CollectionMovie
 from backend.src.models.collections import Collection
 from backend.src.models.models import Movie
+from backend.src.parser import fetch_film_data
 
 
 class CollectionService:
@@ -128,17 +131,51 @@ class CollectionService:
         await self._db.delete(collection)
         await self._db.commit()
 
+    def _float_or_none(self, value) -> float | None:
+        if value is None or value == "":
+            return None
+        try:
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    async def _ensure_movie(self, movie_id: int) -> Movie:
+        movie = await self._db.get(Movie, movie_id)
+        if movie:
+            return movie
+
+        try:
+            data = await fetch_film_data(movie_id)
+        except Exception:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Movie not found") from None
+
+        if not data or not isinstance(data, dict):
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "Movie not found")
+
+        year = data.get("year")
+        release = date(year, 1, 1) if isinstance(year, int) and year > 1800 else None
+        movie = Movie(
+            id=movie_id,
+            title=data.get("nameRu") or data.get("nameOriginal") or data.get("nameEn") or f"Фильм {movie_id}",
+            original_title=data.get("nameOriginal") or data.get("nameEn"),
+            poster_url=data.get("posterUrl"),
+            kp_rating=self._float_or_none(data.get("ratingKinopoisk")),
+            imdb_rating=self._float_or_none(data.get("ratingImdb")),
+            description=data.get("description"),
+            release_date=release,
+            duration=data.get("filmLength") if isinstance(data.get("filmLength"), int) else None,
+        )
+        self._db.add(movie)
+        await self._db.flush()
+        return movie
+
     async def add_movie(
         self, collection_id: int, movie_id: int, user_id: int
     ) -> None:
         collection = await self._get_or_404(collection_id)
         self._ensure_owner(collection, user_id)
 
-        movie_exists = (
-            await self._db.execute(select(Movie.id).where(Movie.id == movie_id))
-        ).scalar_one_or_none()
-        if not movie_exists:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "Movie not found")
+        await self._ensure_movie(movie_id)
 
         already = (
             await self._db.execute(

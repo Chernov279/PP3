@@ -45,8 +45,6 @@ export function AddToCollectionMenu({
       const message = e instanceof Error ? e.message : "";
       if (message.toLowerCase().includes("already")) {
         toast.info("Этот фильм уже есть в коллекции");
-      } else if (message.toLowerCase().includes("not found")) {
-        toast.error("Фильм ещё не в каталоге сервиса — его нельзя добавить в коллекцию");
       } else {
         toast.error(message || "Не удалось добавить фильм в коллекцию");
       }
