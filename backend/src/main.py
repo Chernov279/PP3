@@ -1,7 +1,7 @@
 import asyncio
 import logging
 
-from backend.src.middlewares import DebugMiddleware
+from backend.src.middlewares import RequestLoggingMiddleware
 import uvicorn
 
 from fastapi import FastAPI
@@ -39,7 +39,7 @@ def get_application() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
-    application.add_middleware(DebugMiddleware)
+    application.add_middleware(RequestLoggingMiddleware)
     
     return application
 
