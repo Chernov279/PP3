@@ -271,11 +271,28 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
     throw new Error(errorMessage || `HTTP ${response.status}`);
   }
 
-  if (response.status === 204) {
+  if (response.status === 204 || response.status === 205) {
     return {} as T;
   }
 
-  return response.json();
+  const text = await response.text();
+  if (!text) {
+    return {} as T;
+  }
+  return JSON.parse(text) as T;
+}
+
+async function fetchAllPages<T>(endpoint: string): Promise<T[]> {
+  const limit = 100;
+  const items: T[] = [];
+  const join = endpoint.includes("?") ? "&" : "?";
+  for (let page = 1; page <= 20; page++) {
+    const chunk = await apiRequest<T[]>(`${endpoint}${join}limit=${limit}&page=${page}`);
+    const list = Array.isArray(chunk) ? chunk : [];
+    items.push(...list);
+    if (list.length < limit) break;
+  }
+  return items;
 }
 
 // --- Auth Endpoints ---
@@ -343,7 +360,7 @@ export const movieService = {
   },
 
   async getAllGenres(): Promise<Genre[]> {
-    return apiRequest<Genre[]>("/films/all-genres");
+    return fetchAllPages<Genre>("/films/all-genres");
   },
 
   async syncKinopoiskWatchHistory(kinopoiskId: number): Promise<any> {
@@ -385,7 +402,7 @@ export const userService = {
   },
   
   async getFavorites(_userId: string = "me"): Promise<Movie[]> {
-    const raw = await apiRequest<BackendFilm[]>(`/films/favorite`);
+    const raw = await fetchAllPages<BackendFilm>("/films/favorite");
     return raw.map(normalizeMovieFromFilm);
   },
 
@@ -458,7 +475,7 @@ export const personService = {
     return normalizePerson(raw);
   },
   async getFavorites(): Promise<Person[]> {
-    const raw = await apiRequest<BackendActor[]>("/persons/favorite");
+    const raw = await fetchAllPages<BackendActor>("/persons/favorite");
     return raw.map((p) => normalizePerson(p));
   },
   async addFavorite(personId: number): Promise<boolean> {

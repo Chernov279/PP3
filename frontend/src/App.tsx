@@ -7,10 +7,9 @@ import { MovieDetailsDialog } from "./components/MovieDetailsDialog";
 import { AuthDialog } from "./components/AuthDialog";
 import { Genre, Movie, Person } from "./types/movie";
 import { PersonDetailsDialog } from "./components/PersonDetailsDialog";
-import { personService } from "./services/api";
 import { useAuth, AuthProvider } from "./contexts/AuthContext";
 import { toast } from "sonner";
-import { movieService, userService } from "./services/api";
+import { genreService, movieService, personService, userService } from "./services/api";
 import { useApi } from "./hooks/useApi";
 import { Button } from "./components/ui/button";
 import { Film } from "lucide-react";
@@ -26,7 +25,10 @@ function AppContent() {
   const [isAuthDialogOpen, setIsAuthDialogOpen] = useState(false);
   const [selectedPerson, setSelectedPerson] = useState<Person | null>(null);
   const [isPersonDialogOpen, setIsPersonDialogOpen] = useState(false);
-  const [favoritePersonIds, setFavoritePersonIds] = useState<number[]>([]);
+  const [favoriteMoviesList, setFavoriteMoviesList] = useState<Movie[]>([]);
+  const [favoritePersonsList, setFavoritePersonsList] = useState<Person[]>([]);
+  const [favoriteGenresList, setFavoriteGenresList] = useState<Genre[]>([]);
+  const [favoritesLoading, setFavoritesLoading] = useState(false);
   
   // Состояния для фильтров
   const [popularityWeight, setPopularityWeight] = useState<number[]>([50]);
@@ -55,17 +57,45 @@ function AppContent() {
   const allGenres: Genre[] = useMemo(() => apiGenresRaw || [], [apiGenresRaw]);
   const apiGenres = useMemo(() => allGenres.map((g) => g.name), [allGenres]);
 
-  // Подтягиваем жанры, когда пользователь авторизован
+  const favoritePersonIds = useMemo(
+    () => favoritePersonsList.map((p) => p.id),
+    [favoritePersonsList]
+  );
+
+  // Подтягиваем жанры и избранное, когда пользователь авторизован
   useEffect(() => {
-    if (isAuthenticated) {
-      refetchGenres();
-      personService.getFavorites().then((persons) => {
-        setFavoritePersonIds(persons.map((p) => p.id));
-      }).catch(() => setFavoritePersonIds([]));
-    } else {
-      setFavoritePersonIds([]);
+    if (!isAuthenticated) {
+      setFavoriteMoviesList([]);
+      setFavoritePersonsList([]);
+      setFavoriteGenresList([]);
+      return;
     }
-  }, [isAuthenticated, refetchGenres]);
+    refetchGenres();
+    let cancelled = false;
+    setFavoritesLoading(true);
+    Promise.all([
+      userService.getFavorites("me").catch(() => [] as Movie[]),
+      personService.getFavorites().catch(() => [] as Person[]),
+      genreService.getFavorites().catch(() => [] as Genre[]),
+    ])
+      .then(([movies, persons, genres]) => {
+        if (cancelled) return;
+        setFavoriteMoviesList(movies);
+        setFavoritePersonsList(persons);
+        setFavoriteGenresList(genres);
+        updateUserProfile({
+          favoriteMovies: movies.map((m) => m.id),
+          favoriteActors: persons.map((p) => p.name_ru || p.name_en || `ID ${p.id}`),
+          favoriteGenres: genres.map((g) => g.name),
+        });
+      })
+      .finally(() => {
+        if (!cancelled) setFavoritesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isAuthenticated, refetchGenres, updateUserProfile]);
 
   // Determine if we should fetch recommendations
   // Загружаем рекомендации только если пользователь синхронизировал Кинопоиск.
@@ -126,46 +156,123 @@ function AppContent() {
     setIsPersonDialogOpen(true);
   };
 
-  const handleTogglePersonFavorite = async () => {
-    if (!selectedPerson || !isAuthenticated) return;
-    const isFavorite = favoritePersonIds.includes(selectedPerson.id);
+  const handleAddPersonFavorite = async (person: Person) => {
+    if (!isAuthenticated) {
+      toast.error("Пожалуйста, войдите в систему");
+      return;
+    }
+    if (favoritePersonsList.some((p) => p.id === person.id)) return;
+
+    const previous = favoritePersonsList;
+    setFavoritePersonsList((prev) => [...prev, person]);
+    updateUserProfile({
+      favoriteActors: [...previous, person].map(
+        (p) => p.name_ru || p.name_en || `ID ${p.id}`
+      ),
+    });
     try {
-      if (isFavorite) {
-        await personService.removeFavorite(selectedPerson.id);
-        setFavoritePersonIds((prev) => prev.filter((id) => id !== selectedPerson.id));
-        toast.success("Удалено из избранных персон");
-      } else {
-        await personService.addFavorite(selectedPerson.id);
-        setFavoritePersonIds((prev) => [...prev, selectedPerson.id]);
-        toast.success("Добавлено в избранные персоны");
-      }
+      await personService.addFavorite(person.id);
+      toast.success("Добавлено в избранные персоны");
     } catch (e) {
       console.error(e);
-      toast.error("Не удалось обновить избранное");
+      setFavoritePersonsList(previous);
+      updateUserProfile({
+        favoriteActors: previous.map((p) => p.name_ru || p.name_en || `ID ${p.id}`),
+      });
+      toast.error("Не удалось добавить актёра в избранное");
     }
   };
 
-  const handleToggleFavorite = async () => {
-    if (!selectedMovie || !isAuthenticated || !user?.id) {
-        toast.error("Пожалуйста, войдите в систему");
-        return;
+  const handleRemovePersonFavorite = async (person: Person) => {
+    if (!isAuthenticated) return;
+    const previous = favoritePersonsList;
+    setFavoritePersonsList((prev) => prev.filter((p) => p.id !== person.id));
+    updateUserProfile({
+      favoriteActors: previous
+        .filter((p) => p.id !== person.id)
+        .map((p) => p.name_ru || p.name_en || `ID ${p.id}`),
+    });
+    try {
+      await personService.removeFavorite(person.id);
+      toast.success("Удалено из избранных персон");
+    } catch (e) {
+      console.error(e);
+      setFavoritePersonsList(previous);
+      updateUserProfile({
+        favoriteActors: previous.map((p) => p.name_ru || p.name_en || `ID ${p.id}`),
+      });
+      toast.error("Не удалось удалить актёра из избранного");
+    }
+  };
+
+  const handleTogglePersonFavorite = async () => {
+    if (!selectedPerson || !isAuthenticated) return;
+    if (favoritePersonIds.includes(selectedPerson.id)) {
+      await handleRemovePersonFavorite(selectedPerson);
+    } else {
+      await handleAddPersonFavorite(selectedPerson);
+    }
+  };
+
+  const handleToggleFavorite = async (movie?: Movie | null) => {
+    const target = movie ?? selectedMovie;
+    if (!target || !isAuthenticated) {
+      toast.error("Пожалуйста, войдите в систему");
+      return;
     }
 
-    const isFavorite = userProfile.favoriteMovies.includes(selectedMovie.id);
-    
+    const isFav = favoriteMoviesList.some((m) => m.id === target.id);
+    const previous = favoriteMoviesList;
+    const nextList = isFav
+      ? previous.filter((m) => m.id !== target.id)
+      : [target, ...previous.filter((m) => m.id !== target.id)];
+
+    setFavoriteMoviesList(nextList);
+    updateUserProfile({ favoriteMovies: nextList.map((m) => m.id) });
+
     try {
-        await userService.toggleFavorite("me", selectedMovie.id, isFavorite ? "remove" : "add");
-        
-        const newFavorites = isFavorite
-            ? userProfile.favoriteMovies.filter(id => id !== selectedMovie.id)
-            : [...userProfile.favoriteMovies, selectedMovie.id];
-            
-        updateUserProfile({ ...userProfile, favoriteMovies: newFavorites });
-        
-        toast.success(isFavorite ? "Удалено из избранного" : "Добавлено в избранное");
+      await userService.toggleFavorite("me", target.id, isFav ? "remove" : "add");
+      toast.success(isFav ? "Удалено из избранного" : "Добавлено в избранное");
     } catch (e) {
-        toast.error("Не удалось обновить избранное");
-        console.error(e);
+      setFavoriteMoviesList(previous);
+      updateUserProfile({ favoriteMovies: previous.map((m) => m.id) });
+      toast.error("Не удалось обновить избранное");
+      console.error(e);
+    }
+  };
+
+  const handleAddGenre = async (genre: Genre) => {
+    if (!isAuthenticated) return;
+    if (favoriteGenresList.some((g) => g.id === genre.id)) return;
+    const previous = favoriteGenresList;
+    const nextList = [...previous, genre].sort((a, b) => a.name.localeCompare(b.name, "ru"));
+    setFavoriteGenresList(nextList);
+    updateUserProfile({ favoriteGenres: nextList.map((g) => g.name) });
+    try {
+      await genreService.addFavorite(genre.id);
+      toast.success("Жанр добавлен в любимые");
+    } catch (e) {
+      console.error(e);
+      setFavoriteGenresList(previous);
+      updateUserProfile({ favoriteGenres: previous.map((g) => g.name) });
+      toast.error("Не удалось добавить жанр");
+    }
+  };
+
+  const handleRemoveGenre = async (genre: Genre) => {
+    if (!isAuthenticated) return;
+    const previous = favoriteGenresList;
+    const nextList = previous.filter((g) => g.id !== genre.id && g.name !== genre.name);
+    setFavoriteGenresList(nextList);
+    updateUserProfile({ favoriteGenres: nextList.map((g) => g.name) });
+    try {
+      await genreService.removeFavorite(genre.id);
+      toast.success("Жанр удалён из любимых");
+    } catch (e) {
+      console.error(e);
+      setFavoriteGenresList(previous);
+      updateUserProfile({ favoriteGenres: previous.map((g) => g.name) });
+      toast.error("Не удалось удалить жанр");
     }
   };
 
@@ -184,7 +291,7 @@ function AppContent() {
   };
 
   const isFavorite = selectedMovie
-    ? (userProfile.favoriteMovies || []).includes(selectedMovie.id)
+    ? favoriteMoviesList.some((m) => m.id === selectedMovie.id)
     : false;
 
   useEffect(() => {
@@ -268,6 +375,16 @@ function AppContent() {
               onMovieClick={handleMovieClick}
               onPersonClick={handlePersonClick}
               onBack={() => setCurrentView("catalog")}
+              allGenres={allGenres}
+              favoriteMovies={favoriteMoviesList}
+              favoritePersons={favoritePersonsList}
+              favoriteGenres={favoriteGenresList}
+              favoritesLoading={favoritesLoading}
+              onToggleMovieFavorite={(movie) => handleToggleFavorite(movie)}
+              onAddPersonFavorite={handleAddPersonFavorite}
+              onRemovePersonFavorite={handleRemovePersonFavorite}
+              onAddGenre={handleAddGenre}
+              onRemoveGenre={handleRemoveGenre}
             />
           )}
         </>

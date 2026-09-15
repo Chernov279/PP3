@@ -14,10 +14,10 @@ export function PersonCard({ person, onClick, compact = false }: PersonCardProps
 
   return (
     <Card
-      className={`overflow-hidden ${onClick ? "cursor-pointer hover:shadow-lg transition-shadow" : ""}`}
+      className={`overflow-hidden scrollbar-hidden ${onClick ? "cursor-pointer hover:shadow-lg transition-shadow" : ""} h-full`}
       onClick={onClick}
     >
-      <div className="aspect-[2/3] relative overflow-hidden bg-muted flex items-center justify-center">
+      <div className="aspect-[2/3] relative overflow-hidden bg-muted flex items-center justify-center shrink-0">
         {person.poster_url ? (
           <img
             src={person.poster_url}
@@ -33,7 +33,7 @@ export function PersonCard({ person, onClick, compact = false }: PersonCardProps
           </span>
         )}
       </div>
-      <CardContent className={compact ? "p-3" : "p-4"}>
+      <CardContent className={`min-w-0 overflow-hidden ${compact ? "p-3" : "p-4"}`}>
         <h3 className={`mb-1 line-clamp-2 ${compact ? "text-sm leading-snug" : ""}`}>
           {displayName}
         </h3>

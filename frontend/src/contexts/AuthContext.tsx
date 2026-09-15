@@ -1,5 +1,5 @@
 // src/contexts/AuthContext.tsx
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { UserProfile } from '../types/movie';
 import { authService, getAccessToken, clearTokens, setTokens, userService } from '../services/api';
 import { UserResponse } from '../types/auth';
@@ -14,7 +14,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<boolean>;
   register: (email: string, password: string, name: string) => Promise<boolean>;
   logout: () => void;
-  updateUserProfile: (profile: UserProfile) => Promise<void>;
+  updateUserProfile: (profile: Partial<UserProfile>) => Promise<void>;
   updateAvatar: (avatarUrl: string | null) => void;
   refreshProfile: () => Promise<void>;
   loading: boolean;
@@ -153,11 +153,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUser(null);
   };
 
-  const updateUserProfile = async (profile: UserProfile) => {
-    if (!user) return;
-    setUser(prev => (prev ? { ...prev, profile } : null));
-    storeProfile(profile);
-  };
+  const updateUserProfile = useCallback(async (profile: Partial<UserProfile>) => {
+    setUser((prev) => {
+      if (!prev) return null;
+      const current = prev.profile || defaultProfile;
+      const next = { ...current, ...profile };
+      storeProfile(next);
+      return { ...prev, profile: next };
+    });
+  }, []);
 
   const updateAvatar = (avatarUrl: string | null) => {
     setUser((prev) => (prev ? { ...prev, avatar_url: avatarUrl } : null));
