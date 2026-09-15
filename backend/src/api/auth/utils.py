@@ -80,7 +80,7 @@ def hash_refresh_token(refresh_token: str) -> str:
     """
     return sha256(refresh_token.encode()).hexdigest()
 
-def create_access_token(user_id: Union[int, str]) -> str | None:
+def create_access_token(user_id: Union[int, str]) -> str:
     """
     Создание refresh токена для пользователя.
 
