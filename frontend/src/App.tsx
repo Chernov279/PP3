@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { Header } from "./components/Header";
 import { MovieCatalog } from "./components/MovieCatalog";
 import { AccountPage } from "./components/AccountPage";
+import { CollectionsPage } from "./components/CollectionsPage";
 import { SearchDialog } from "./components/SearchDialog";
 import { MovieDetailsDialog } from "./components/MovieDetailsDialog";
 import { AuthDialog } from "./components/AuthDialog";
@@ -9,12 +10,13 @@ import { Genre, Movie, Person } from "./types/movie";
 import { PersonDetailsDialog } from "./components/PersonDetailsDialog";
 import { useAuth, AuthProvider } from "./contexts/AuthContext";
 import { toast } from "sonner";
-import { genreService, movieService, personService, userService } from "./services/api";
+import { genreService, movieService, personService, userService, collectionService } from "./services/api";
+import { Collection } from "./types/collection";
 import { useApi } from "./hooks/useApi";
 import { Button } from "./components/ui/button";
 import { Film } from "lucide-react";
 
-type View = "catalog" | "account";
+type View = "catalog" | "account" | "collections";
 
 function AppContent() {
   const { user, isAuthenticated, updateUserProfile, logout, loading: authLoading } = useAuth();
@@ -29,6 +31,8 @@ function AppContent() {
   const [favoritePersonsList, setFavoritePersonsList] = useState<Person[]>([]);
   const [favoriteGenresList, setFavoriteGenresList] = useState<Genre[]>([]);
   const [favoritesLoading, setFavoritesLoading] = useState(false);
+  const [myCollections, setMyCollections] = useState<Collection[]>([]);
+  const [openCollectionId, setOpenCollectionId] = useState<number | null>(null);
   
   // Состояния для фильтров
   const [popularityWeight, setPopularityWeight] = useState<number[]>([50]);
@@ -62,15 +66,26 @@ function AppContent() {
     [favoritePersonsList]
   );
 
+  const refreshMyCollections = useCallback(async () => {
+    try {
+      const page = await collectionService.listMine(1, 100);
+      setMyCollections(page.items || []);
+    } catch {
+      setMyCollections([]);
+    }
+  }, []);
+
   // Подтягиваем жанры и избранное, когда пользователь авторизован
   useEffect(() => {
     if (!isAuthenticated) {
       setFavoriteMoviesList([]);
       setFavoritePersonsList([]);
       setFavoriteGenresList([]);
+      setMyCollections([]);
       return;
     }
     refetchGenres();
+    refreshMyCollections();
     let cancelled = false;
     setFavoritesLoading(true);
     Promise.all([
@@ -95,7 +110,7 @@ function AppContent() {
     return () => {
       cancelled = true;
     };
-  }, [isAuthenticated, refetchGenres, updateUserProfile]);
+  }, [isAuthenticated, refetchGenres, updateUserProfile, refreshMyCollections]);
 
   // Determine if we should fetch recommendations
   // Загружаем рекомендации только если пользователь синхронизировал Кинопоиск.
@@ -288,6 +303,21 @@ function AppContent() {
     logout();
     toast.success("Вы вышли из аккаунта");
     setCurrentView("catalog");
+    setOpenCollectionId(null);
+  };
+
+  const handleOpenCollections = () => {
+    if (!isAuthenticated) {
+      setIsAuthDialogOpen(true);
+      return;
+    }
+    setOpenCollectionId(null);
+    setCurrentView("collections");
+  };
+
+  const handleOpenCollection = (collection: Collection) => {
+    setOpenCollectionId(collection.id);
+    setCurrentView("collections");
   };
 
   const isFavorite = selectedMovie
@@ -309,7 +339,11 @@ function AppContent() {
       <Header
         onSearchClick={() => setIsSearchOpen(true)}
         onAccountClick={handleAccountClick}
-        onLogoClick={() => setCurrentView("catalog")}
+        onCollectionsClick={handleOpenCollections}
+        onLogoClick={() => {
+          setOpenCollectionId(null);
+          setCurrentView("catalog");
+        }}
         onLoginClick={() => setIsAuthDialogOpen(true)}
         isAuthenticated={isAuthenticated}
         userName={user?.name}
@@ -368,6 +402,20 @@ function AppContent() {
             </>
           )}
 
+          {currentView === "collections" && (
+            <CollectionsPage
+              key={openCollectionId ?? "collections-home"}
+              currentUserId={user?.id}
+              onMovieClick={handleMovieClick}
+              onBack={() => {
+                setOpenCollectionId(null);
+                setCurrentView("catalog");
+              }}
+              onCollectionsChanged={refreshMyCollections}
+              initialCollectionId={openCollectionId}
+            />
+          )}
+
           {currentView === "account" && (
             <AccountPage
               profile={userProfile}
@@ -395,6 +443,7 @@ function AppContent() {
         onOpenChange={setIsSearchOpen}
         onMovieClick={handleMovieClick}
         onPersonClick={handlePersonClick}
+        onCollectionClick={handleOpenCollection}
       />
 
       <MovieDetailsDialog
@@ -404,6 +453,8 @@ function AppContent() {
         isFavorite={isFavorite}
         onToggleFavorite={handleToggleFavorite}
         onOpenMovie={handleMovieClick}
+        myCollections={myCollections}
+        onCollectionsChanged={refreshMyCollections}
       />
 
       <PersonDetailsDialog

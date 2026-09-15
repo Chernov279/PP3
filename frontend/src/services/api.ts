@@ -1,5 +1,12 @@
 import { Genre, Movie, Person } from "../types/movie";
 import { LoginRequest, RegisterRequest, TokenResponse, UserResponse } from "../types/auth";
+import {
+  Collection,
+  CollectionDetail,
+  CollectionMovie,
+  CollectionPage,
+  CollectionWritePayload,
+} from "../types/collection";
 
 function getApiBaseUrl() {
   const raw =
@@ -167,11 +174,32 @@ function normalizeMovieFromSearch(f: BackendSearchFilm): Movie {
   };
 }
 
+function yearFromReleaseDate(releaseDate?: string | null): number {
+  if (typeof releaseDate === "string" && releaseDate.length >= 4) {
+    return Number(releaseDate.slice(0, 4)) || 0;
+  }
+  return 0;
+}
+
+export function movieFromCollectionItem(m: CollectionMovie): Movie {
+  return {
+    id: m.id,
+    title: m.title,
+    year: yearFromReleaseDate(m.release_date),
+    genres: [],
+    rating: Number(m.kp_rating ?? 0),
+    popularity: 0,
+    description: "",
+    poster: m.poster_url || "",
+    actors: [],
+    director: "",
+    playerUrl: "",
+    kinopoiskRating: m.kp_rating ?? undefined,
+  };
+}
+
 function normalizeMovieFromFilm(f: BackendFilm): Movie {
-  const year =
-    typeof f.release_date === "string" && f.release_date.length >= 4
-      ? Number(f.release_date.slice(0, 4))
-      : 0;
+  const year = yearFromReleaseDate(f.release_date);
   return {
     id: f.id,
     title: f.title,
@@ -385,6 +413,16 @@ export const movieService = {
     const raw = await apiRequest<BackendSearchFilm[]>(`/films/search?${params.toString()}`);
     return raw.map(normalizeMovieFromSearch);
   },
+
+  async searchFilmsInDb(query: string, page = 1, limit = 12): Promise<Movie[]> {
+    const params = new URLSearchParams({
+      q: query,
+      page: String(page),
+      limit: String(limit),
+    });
+    const raw = await apiRequest<BackendFilm[]>(`/films/db-search?${params.toString()}`);
+    return (Array.isArray(raw) ? raw : []).map(normalizeMovieFromFilm);
+  },
 };
 
 export const userService = {
@@ -453,6 +491,59 @@ export const genreService = {
   },
   async removeFavorite(genreId: number): Promise<boolean> {
     return apiRequest<boolean>(`/genres/favorite/${genreId}`, { method: "DELETE" });
+  },
+};
+
+export const collectionService = {
+  async listMine(page = 1, size = 20): Promise<CollectionPage> {
+    const params = new URLSearchParams({ page: String(page), size: String(size) });
+    return apiRequest<CollectionPage>(`/collections/my?${params.toString()}`);
+  },
+
+  async listPublic(page = 1, size = 20): Promise<CollectionPage> {
+    const params = new URLSearchParams({ page: String(page), size: String(size) });
+    return apiRequest<CollectionPage>(`/collections/public?${params.toString()}`);
+  },
+
+  async search(query: string, page = 1, size = 20, onlyPublic = true): Promise<CollectionPage> {
+    const params = new URLSearchParams({
+      q: query,
+      page: String(page),
+      size: String(size),
+      only_public: String(onlyPublic),
+    });
+    return apiRequest<CollectionPage>(`/collections/search?${params.toString()}`);
+  },
+
+  async getById(collectionId: number): Promise<CollectionDetail> {
+    const raw = await apiRequest<CollectionDetail>(`/collections/${collectionId}`);
+    return { ...raw, movies: raw.movies || [] };
+  },
+
+  async create(data: CollectionWritePayload): Promise<Collection> {
+    return apiRequest<Collection>("/collections", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async update(collectionId: number, data: Partial<CollectionWritePayload>): Promise<Collection> {
+    return apiRequest<Collection>(`/collections/${collectionId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async remove(collectionId: number): Promise<void> {
+    await apiRequest(`/collections/${collectionId}`, { method: "DELETE" });
+  },
+
+  async addMovie(collectionId: number, movieId: number): Promise<void> {
+    await apiRequest(`/collections/${collectionId}/movies/${movieId}`, { method: "POST" });
+  },
+
+  async removeMovie(collectionId: number, movieId: number): Promise<void> {
+    await apiRequest(`/collections/${collectionId}/movies/${movieId}`, { method: "DELETE" });
   },
 };
 

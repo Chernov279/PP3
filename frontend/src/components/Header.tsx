@@ -1,4 +1,4 @@
-import { Search, LogIn, LogOut } from "lucide-react";
+import { Search, LogIn, LogOut, Library } from "lucide-react";
 import { Button } from "./ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { ThemeToggle } from "./ThemeToggle";
@@ -6,6 +6,7 @@ import { ThemeToggle } from "./ThemeToggle";
 interface HeaderProps {
   onSearchClick: () => void;
   onAccountClick: () => void;
+  onCollectionsClick?: () => void;
   onLogoClick: () => void;
   onLoginClick: () => void;
   isAuthenticated: boolean;
@@ -17,6 +18,7 @@ interface HeaderProps {
 export function Header({
   onSearchClick,
   onAccountClick,
+  onCollectionsClick,
   onLogoClick,
   onLoginClick,
   isAuthenticated,
@@ -46,6 +48,11 @@ export function Header({
         
         <div className="flex items-center gap-2">
           <ThemeToggle />
+          {isAuthenticated && onCollectionsClick && (
+            <Button variant="ghost" size="icon" onClick={onCollectionsClick} title="Коллекции">
+              <Library className="h-5 w-5" />
+            </Button>
+          )}
           <Button variant="ghost" size="icon" onClick={onSearchClick}>
             <Search className="h-5 w-5" />
           </Button>

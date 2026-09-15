@@ -4,16 +4,21 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Input } from "./ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "./ui/tabs";
 import { Movie, Person } from "../types/movie";
+import { Collection } from "../types/collection";
 import { MovieCard } from "./MovieCard";
 import { PersonCard } from "./PersonCard";
+import { CollectionCard } from "./CollectionCard";
 import { useMutation } from "../hooks/useApi";
-import { movieService, personService } from "../services/api";
+import { collectionService, movieService, personService } from "../services/api";
+
+type SearchTab = "films" | "persons" | "collections";
 
 interface SearchDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onMovieClick: (movie: Movie) => void;
   onPersonClick: (person: Person) => void;
+  onCollectionClick?: (collection: Collection) => void;
 }
 
 export function SearchDialog({
@@ -21,38 +26,46 @@ export function SearchDialog({
   onOpenChange,
   onMovieClick,
   onPersonClick,
+  onCollectionClick,
 }: SearchDialogProps) {
   const [searchQuery, setSearchQuery] = useState("");
-  const [tab, setTab] = useState<"films" | "persons">("films");
+  const [tab, setTab] = useState<SearchTab>("films");
 
   const { data: filmResults, loading: filmsLoading, mutate: searchFilms } =
     useMutation(movieService.searchFilms);
   const { data: personResults, loading: personsLoading, mutate: searchPersons } =
     useMutation(personService.search);
+  const { data: collectionPage, loading: collectionsLoading, mutate: searchCollections } =
+    useMutation(async (query: string) => collectionService.search(query, 1, 20, true));
+
+  const runSearch = (query: string, nextTab: SearchTab) => {
+    const trimmed = query.trim();
+    if (trimmed.length <= 2) return;
+    if (nextTab === "films") searchFilms(trimmed);
+    else if (nextTab === "persons") searchPersons(trimmed, 1);
+    else searchCollections(trimmed);
+  };
 
   const handleSearch = (query: string) => {
     setSearchQuery(query);
-    const trimmed = query.trim();
-    if (trimmed.length <= 2) return;
-    if (tab === "films") {
-      searchFilms(trimmed);
-    } else {
-      searchPersons(trimmed, 1);
-    }
+    runSearch(query, tab);
   };
 
   const handleTabChange = (value: string) => {
-    const next = value as "films" | "persons";
+    const next = value as SearchTab;
     setTab(next);
-    const trimmed = searchQuery.trim();
-    if (trimmed.length > 2) {
-      if (next === "films") searchFilms(trimmed);
-      else searchPersons(trimmed, 1);
-    }
+    runSearch(searchQuery, next);
   };
 
-  const loading = tab === "films" ? filmsLoading : personsLoading;
-  const results = tab === "films" ? filmResults : personResults;
+  const loading =
+    tab === "films" ? filmsLoading : tab === "persons" ? personsLoading : collectionsLoading;
+  const collectionResults = collectionPage?.items || [];
+  const hasEmptyResults =
+    tab === "films"
+      ? Boolean(filmResults && filmResults.length === 0)
+      : tab === "persons"
+        ? Boolean(personResults && personResults.length === 0)
+        : Boolean(collectionPage && collectionResults.length === 0);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -60,14 +73,15 @@ export function SearchDialog({
         <DialogHeader>
           <DialogTitle>Поиск</DialogTitle>
           <DialogDescription>
-            Фильмы и персоны через API КиноРек
+            Фильмы, персоны и публичные коллекции
           </DialogDescription>
         </DialogHeader>
 
         <Tabs value={tab} onValueChange={handleTabChange}>
-          <TabsList className="grid w-full grid-cols-2">
+          <TabsList className="grid w-full grid-cols-3">
             <TabsTrigger value="films">Фильмы</TabsTrigger>
-            <TabsTrigger value="persons">Актёры и режиссёры</TabsTrigger>
+            <TabsTrigger value="persons">Персоны</TabsTrigger>
+            <TabsTrigger value="collections">Коллекции</TabsTrigger>
           </TabsList>
 
           <TabsContent value={tab} className="space-y-4 mt-4 min-h-0 overflow-hidden">
@@ -77,7 +91,9 @@ export function SearchDialog({
                 placeholder={
                   tab === "films"
                     ? "Введите название фильма..."
-                    : "Введите имя актёра или режиссёра..."
+                    : tab === "persons"
+                      ? "Введите имя актёра или режиссёра..."
+                      : "Найдите публичную коллекцию..."
                 }
                 value={searchQuery}
                 onChange={(e) => handleSearch(e.target.value)}
@@ -128,7 +144,23 @@ export function SearchDialog({
                 </div>
               )}
 
-              {!loading && searchQuery.length > 2 && results && results.length === 0 && (
+              {!loading && tab === "collections" && collectionResults.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  {collectionResults.map((collection) => (
+                    <CollectionCard
+                      key={collection.id}
+                      collection={collection}
+                      onClick={() => {
+                        onCollectionClick?.(collection);
+                        onOpenChange(false);
+                        setSearchQuery("");
+                      }}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {!loading && searchQuery.length > 2 && hasEmptyResults && (
                 <div className="text-center py-8 text-muted-foreground">
                   Ничего не найдено по запросу «{searchQuery}»
                 </div>
