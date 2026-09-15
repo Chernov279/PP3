@@ -9,7 +9,7 @@ from backend.src.api.collections.schemas import (
     CollectionUpdate,
 )
 from backend.src.api.collections.service import CollectionService
-from backend.src.api.auth.dependencies import get_token_sub_required
+from backend.src.api.auth.dependencies import get_token_sub_optional, get_token_sub_required
 from backend.src.database.connection import get_db_session
 
 collections = APIRouter(prefix="/collections", tags=["Collections"])
@@ -85,7 +85,7 @@ async def search_collections(
 @collections.get("/{collection_id}", response_model=CollectionDetailOut)
 async def get_collection(
     collection_id: int,
-    user_id: int = Depends(get_token_sub_required),
+    user_id: int = Depends(get_token_sub_optional),
     service: CollectionService = Depends(get_collection_service),
 ):
     collection = await service.get_one(collection_id, user_id)
@@ -133,3 +133,4 @@ async def remove_movie_from_collection(
     service: CollectionService = Depends(get_collection_service),
 ):
     await service.remove_movie(collection_id, movie_id, user_id)
+    
