@@ -1,4 +1,5 @@
 from datetime import date
+from typing import Optional
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
@@ -41,7 +42,7 @@ class CollectionService:
         await self._db.refresh(collection)
         return collection
 
-    async def get_one(self, collection_id: int, user_id: int) -> Collection:
+    async def get_one(self, collection_id: int, user_id: Optional[int]) -> Collection:
         collection = await self._get_or_404(collection_id)
         if not collection.is_public and collection.user_id != user_id:
             raise HTTPException(status.HTTP_403_FORBIDDEN, "Collection is private")
