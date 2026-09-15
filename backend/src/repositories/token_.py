@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 
+from sqlalchemy import update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.src.api.auth.schemas import RefreshTokenInternal
@@ -81,3 +82,16 @@ class TokenRepository(SQLAlchemyRepository[RefreshToken]):
                 "revoked_at": datetime.now(timezone.utc),
             },
         ) > 0
+
+    async def revoke_all_user_tokens(self, user_id: int) -> int:
+        now = datetime.now(timezone.utc)
+        stmt = (
+            update(RefreshToken)
+            .where(
+                RefreshToken.user_id == user_id,
+                RefreshToken.revoked_at.is_(None),
+            )
+            .values(revoked_at=now)
+        )
+        result = await self._session.execute(stmt)
+        return result.rowcount or 0

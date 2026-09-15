@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, status
 from fastapi.security import OAuth2PasswordRequestForm
 
-from .dependencies import get_auth_service, get_refresh_token
+from .dependencies import get_auth_service, get_refresh_token, get_token_sub_required
 from .schemas import TokensOut, AuthRegisterIn, AuthLoginIn, LogoutOut
 
 from .service import AuthService
@@ -79,7 +79,6 @@ async def login_user(
 
     **Примечание:** Refresh токен также устанавливается в HTTP-only cookie.
     """
-    # Вызываем метод сервиса, передавая данные для входа
     return await auth_service.login_user(login_data)
 
 
@@ -192,3 +191,31 @@ async def logout_user(
 
     return await auth_service.logout_user(refresh_token)
 
+
+@auth.post(
+    "/logout-all",
+    status_code=status.HTTP_200_OK,
+    summary="Выход со всех устройств",
+    response_description="Пользователь вышел со всех устройств",
+    responses={
+        200: {"description": "Все сессии отозваны"},
+        401: {"description": "Пользователь не авторизован"},
+    }
+)
+async def logout_all_user(
+        user_id: int = Depends(get_token_sub_required),
+        auth_service: AuthService = Depends(get_auth_service),
+) -> LogoutOut:
+    """
+    Выход пользователя со всех устройств.
+
+    Отзывает все активные refresh токены пользователя.
+    Access токены, выданные ранее, останутся валидными
+    до истечения их срока (stateless JWT).
+
+    **Ответ:**
+    - `device_logged_out` (bool): true, если была отозвана хотя бы одна сессия
+    - `timestamp` (str): Время выполнения операции
+    """
+
+    return await auth_service.logout_all_user(user_id)
