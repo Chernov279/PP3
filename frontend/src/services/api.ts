@@ -1,5 +1,12 @@
 import { Genre, Movie, Person } from "../types/movie";
 import { LoginRequest, RegisterRequest, TokenResponse, UserResponse } from "../types/auth";
+import {
+  Collection,
+  CollectionDetail,
+  CollectionMovie,
+  CollectionPage,
+  CollectionWritePayload,
+} from "../types/collection";
 
 function getApiBaseUrl() {
   const raw =
@@ -167,11 +174,32 @@ function normalizeMovieFromSearch(f: BackendSearchFilm): Movie {
   };
 }
 
+function yearFromReleaseDate(releaseDate?: string | null): number {
+  if (typeof releaseDate === "string" && releaseDate.length >= 4) {
+    return Number(releaseDate.slice(0, 4)) || 0;
+  }
+  return 0;
+}
+
+export function movieFromCollectionItem(m: CollectionMovie): Movie {
+  return {
+    id: m.id,
+    title: m.title,
+    year: yearFromReleaseDate(m.release_date),
+    genres: [],
+    rating: Number(m.kp_rating ?? 0),
+    popularity: 0,
+    description: "",
+    poster: m.poster_url || "",
+    actors: [],
+    director: "",
+    playerUrl: "",
+    kinopoiskRating: m.kp_rating ?? undefined,
+  };
+}
+
 function normalizeMovieFromFilm(f: BackendFilm): Movie {
-  const year =
-    typeof f.release_date === "string" && f.release_date.length >= 4
-      ? Number(f.release_date.slice(0, 4))
-      : 0;
+  const year = yearFromReleaseDate(f.release_date);
   return {
     id: f.id,
     title: f.title,
@@ -271,11 +299,28 @@ async function apiRequest<T>(endpoint: string, options: RequestInit = {}): Promi
     throw new Error(errorMessage || `HTTP ${response.status}`);
   }
 
-  if (response.status === 204) {
+  if (response.status === 204 || response.status === 205) {
     return {} as T;
   }
 
-  return response.json();
+  const text = await response.text();
+  if (!text) {
+    return {} as T;
+  }
+  return JSON.parse(text) as T;
+}
+
+async function fetchAllPages<T>(endpoint: string): Promise<T[]> {
+  const limit = 100;
+  const items: T[] = [];
+  const join = endpoint.includes("?") ? "&" : "?";
+  for (let page = 1; page <= 20; page++) {
+    const chunk = await apiRequest<T[]>(`${endpoint}${join}limit=${limit}&page=${page}`);
+    const list = Array.isArray(chunk) ? chunk : [];
+    items.push(...list);
+    if (list.length < limit) break;
+  }
+  return items;
 }
 
 // --- Auth Endpoints ---
@@ -296,6 +341,18 @@ export const authService = {
 
   async getMe(): Promise<UserResponse> {
     return apiRequest<UserResponse>("/users/me");
+  },
+
+  async logoutSession(): Promise<void> {
+    const refreshToken = getRefreshToken();
+    await apiRequest("/auth/logout", {
+      method: "POST",
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+  },
+
+  async logoutAllSessions(): Promise<void> {
+    await apiRequest("/auth/logout-all", { method: "POST" });
   },
 
   logout() {
@@ -343,7 +400,7 @@ export const movieService = {
   },
 
   async getAllGenres(): Promise<Genre[]> {
-    return apiRequest<Genre[]>("/films/all-genres");
+    return fetchAllPages<Genre>("/films/all-genres");
   },
 
   async syncKinopoiskWatchHistory(kinopoiskId: number): Promise<any> {
@@ -368,6 +425,16 @@ export const movieService = {
     const raw = await apiRequest<BackendSearchFilm[]>(`/films/search?${params.toString()}`);
     return raw.map(normalizeMovieFromSearch);
   },
+
+  async searchFilmsInDb(query: string, page = 1, limit = 12): Promise<Movie[]> {
+    const params = new URLSearchParams({
+      q: query,
+      page: String(page),
+      limit: String(limit),
+    });
+    const raw = await apiRequest<BackendFilm[]>(`/films/db-search?${params.toString()}`);
+    return (Array.isArray(raw) ? raw : []).map(normalizeMovieFromFilm);
+  },
 };
 
 export const userService = {
@@ -385,7 +452,7 @@ export const userService = {
   },
   
   async getFavorites(_userId: string = "me"): Promise<Movie[]> {
-    const raw = await apiRequest<BackendFilm[]>(`/films/favorite`);
+    const raw = await fetchAllPages<BackendFilm>("/films/favorite");
     return raw.map(normalizeMovieFromFilm);
   },
 
@@ -439,6 +506,59 @@ export const genreService = {
   },
 };
 
+export const collectionService = {
+  async listMine(page = 1, size = 20): Promise<CollectionPage> {
+    const params = new URLSearchParams({ page: String(page), size: String(size) });
+    return apiRequest<CollectionPage>(`/collections/my?${params.toString()}`);
+  },
+
+  async listPublic(page = 1, size = 20): Promise<CollectionPage> {
+    const params = new URLSearchParams({ page: String(page), size: String(size) });
+    return apiRequest<CollectionPage>(`/collections/public?${params.toString()}`);
+  },
+
+  async search(query: string, page = 1, size = 20, onlyPublic = true): Promise<CollectionPage> {
+    const params = new URLSearchParams({
+      q: query,
+      page: String(page),
+      size: String(size),
+      only_public: String(onlyPublic),
+    });
+    return apiRequest<CollectionPage>(`/collections/search?${params.toString()}`);
+  },
+
+  async getById(collectionId: number): Promise<CollectionDetail> {
+    const raw = await apiRequest<CollectionDetail>(`/collections/${collectionId}`);
+    return { ...raw, movies: raw.movies || [] };
+  },
+
+  async create(data: CollectionWritePayload): Promise<Collection> {
+    return apiRequest<Collection>("/collections", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async update(collectionId: number, data: Partial<CollectionWritePayload>): Promise<Collection> {
+    return apiRequest<Collection>(`/collections/${collectionId}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    });
+  },
+
+  async remove(collectionId: number): Promise<void> {
+    await apiRequest(`/collections/${collectionId}`, { method: "DELETE" });
+  },
+
+  async addMovie(collectionId: number, movieId: number): Promise<void> {
+    await apiRequest(`/collections/${collectionId}/movies/${movieId}`, { method: "POST" });
+  },
+
+  async removeMovie(collectionId: number, movieId: number): Promise<void> {
+    await apiRequest(`/collections/${collectionId}/movies/${movieId}`, { method: "DELETE" });
+  },
+};
+
 export const personService = {
   async search(query: string, page = 1): Promise<Person[]> {
     const params = new URLSearchParams({ query, page: String(page) });
@@ -458,7 +578,7 @@ export const personService = {
     return normalizePerson(raw);
   },
   async getFavorites(): Promise<Person[]> {
-    const raw = await apiRequest<BackendActor[]>("/persons/favorite");
+    const raw = await fetchAllPages<BackendActor>("/persons/favorite");
     return raw.map((p) => normalizePerson(p));
   },
   async addFavorite(personId: number): Promise<boolean> {

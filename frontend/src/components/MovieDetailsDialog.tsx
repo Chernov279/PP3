@@ -4,11 +4,13 @@ import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 import { Star, Heart, ExternalLink, Loader2 } from "lucide-react";
 import { Movie } from "../types/movie";
+import { Collection } from "../types/collection";
 import { useAuth } from "../contexts/AuthContext";
 import { toast } from "sonner";
 import { ScoreBadge } from "./ScoreBadge";
 import { useApi } from "../hooks/useApi";
 import { movieService } from "../services/api";
+import { AddToCollectionMenu } from "./AddToCollectionMenu";
 
 interface MovieDetailsDialogProps {
   movie: Movie | null;
@@ -17,6 +19,8 @@ interface MovieDetailsDialogProps {
   isFavorite: boolean;
   onToggleFavorite: () => void;
   onOpenMovie?: (movie: Movie) => void;
+  myCollections?: Collection[];
+  onCollectionsChanged?: () => void;
 }
 
 export function MovieDetailsDialog({ 
@@ -26,6 +30,8 @@ export function MovieDetailsDialog({
   isFavorite, 
   onToggleFavorite,
   onOpenMovie,
+  myCollections = [],
+  onCollectionsChanged,
 }: MovieDetailsDialogProps) {
   const { isAuthenticated } = useAuth();
 
@@ -104,6 +110,13 @@ export function MovieDetailsDialog({
                 <Heart className={`h-4 w-4 mr-2 ${isFavorite ? "fill-current" : ""}`} />
                 {isFavorite ? "В избранном" : "В избранное"}
               </Button>
+              {isAuthenticated && (
+                <AddToCollectionMenu
+                  movie={movie}
+                  collections={myCollections}
+                  onCollectionsChanged={onCollectionsChanged}
+                />
+              )}
             </div>
             
             <div className="flex flex-wrap gap-2">

@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { Button } from "./ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "./ui/card";
 import { Badge } from "./ui/badge";
@@ -18,21 +18,31 @@ import {
   TabsTrigger,
 } from "./ui/tabs";
 import { Plus, Trash2, Link as LinkIcon, Loader2 } from "lucide-react";
-import { Movie, Person, UserProfile } from "../types/movie";
+import { Genre, Movie, Person, UserProfile } from "../types/movie";
 import { MovieCard } from "./MovieCard";
 import { PersonCard } from "./PersonCard";
 import { ProfileAvatar } from "./ProfileAvatar";
 import { useAuth } from "../contexts/AuthContext";
-import { userService, movieService, genreService, personService } from "../services/api";
+import { userService, movieService, personService } from "../services/api";
 import { useApi } from "../hooks/useApi";
 import { toast } from "sonner";
 
 interface AccountPageProps {
   profile: UserProfile;
-  onUpdateProfile: (profile: UserProfile) => void;
+  onUpdateProfile: (profile: Partial<UserProfile>) => void;
   onMovieClick: (movie: Movie) => void;
   onPersonClick: (person: Person) => void;
   onBack: () => void;
+  allGenres: Genre[];
+  favoriteMovies: Movie[];
+  favoritePersons: Person[];
+  favoriteGenres: Genre[];
+  favoritesLoading?: boolean;
+  onToggleMovieFavorite: (movie: Movie) => void;
+  onAddPersonFavorite: (person: Person) => void;
+  onRemovePersonFavorite: (person: Person) => void;
+  onAddGenre: (genre: Genre) => void;
+  onRemoveGenre: (genre: Genre) => void;
 }
 
 export function AccountPage({
@@ -41,51 +51,35 @@ export function AccountPage({
   onMovieClick,
   onPersonClick,
   onBack,
+  allGenres,
+  favoriteMovies,
+  favoritePersons,
+  favoriteGenres,
+  favoritesLoading = false,
+  onToggleMovieFavorite,
+  onAddPersonFavorite,
+  onRemovePersonFavorite,
+  onAddGenre,
+  onRemoveGenre,
 }: AccountPageProps) {
   const { user, updateAvatar } = useAuth();
   const [newActor, setNewActor] = useState("");
   const [isSearchingActor, setIsSearchingActor] = useState(false);
   const [actorSuggestions, setActorSuggestions] = useState<Person[]>([]);
 
-  // States for Kinopoisk Sync Dialog
   const [isKinopoiskDialogOpen, setIsKinopoiskDialogOpen] = useState(false);
   const [kinopoiskIdInput, setKinopoiskIdInput] = useState("");
   const [isSyncing, setIsSyncing] = useState(false);
 
-  // Memoize API calls to avoid unneeded re-renders/fetches
   const fetchWatched = useCallback(() => {
     if (!user?.id) return Promise.resolve([]);
     return userService.getWatched(user.id);
   }, [user?.id]);
 
-  const fetchFavorites = useCallback(() => userService.getFavorites("me"), []);
-  const fetchAllGenres = useCallback(() => movieService.getAllGenres(), []);
-  const fetchFavoriteGenres = useCallback(() => genreService.getFavorites(), []);
-  const fetchFavoritePersons = useCallback(() => personService.getFavorites(), []);
-
-  // Fetch data
   const { data: watchedMovies, loading: watchedLoading } = useApi(
     fetchWatched,
     { immediate: !!user?.id }
   );
-
-  const { data: favoriteMovies, loading: favoritesLoading } = useApi(
-    fetchFavorites,
-    { immediate: true }
-  );
-  
-  const { data: allGenresRaw } = useApi(fetchAllGenres, { immediate: true });
-  const allGenres = useMemo(() => allGenresRaw || [], [allGenresRaw]);
-
-  const {
-    data: favoriteGenresRaw,
-    refetch: refetchFavoriteGenres,
-  } = useApi(fetchFavoriteGenres, { immediate: true });
-
-  const {
-    data: favoritePersonsRaw,
-    refetch: refetchFavoritePersons,
-  } = useApi(fetchFavoritePersons, { immediate: !!user?.id });
 
   const uniqueWatchedMovies = useMemo(() => {
     const seen = new Set<number>();
@@ -98,51 +92,22 @@ export function AccountPage({
 
   const uniqueFavoriteMovies = useMemo(() => {
     const seen = new Set<number>();
-    return (favoriteMovies || []).filter((movie) => {
+    return favoriteMovies.filter((movie) => {
       if (seen.has(movie.id)) return false;
       seen.add(movie.id);
       return true;
     });
   }, [favoriteMovies]);
 
-  // Sync favorite genres from backend into local profile state
-  useEffect(() => {
-    if (!favoriteGenresRaw) return;
-    const names = favoriteGenresRaw.map((g) => g.name);
-    if (JSON.stringify(names) !== JSON.stringify(profile.favoriteGenres || [])) {
-      onUpdateProfile({ ...profile, favoriteGenres: names });
-    }
-  }, [favoriteGenresRaw, profile.favoriteGenres, onUpdateProfile, profile]);
+  const favoriteGenreIds = useMemo(
+    () => new Set(favoriteGenres.map((g) => g.id)),
+    [favoriteGenres]
+  );
 
-  // Sync favorite persons (actors) from backend into local profile state
-  useEffect(() => {
-    if (!favoritePersonsRaw) return;
-    const names = favoritePersonsRaw.map(
-      (p) => p.name_ru || p.name_en || `ID ${p.id}`
-    );
-    if (JSON.stringify(names) !== JSON.stringify(profile.favoriteActors || [])) {
-      onUpdateProfile({ ...profile, favoriteActors: names });
-    }
-  }, [favoritePersonsRaw, profile.favoriteActors, onUpdateProfile, profile]);
-
-  const handleAddGenre = async (genre: string) => {
-    const currentGenres = profile.favoriteGenres || [];
-    if (currentGenres.includes(genre)) return;
-
-    const genreId = allGenres.find((g) => g.name === genre)?.id;
-    if (typeof genreId === "number") {
-      await genreService.addFavorite(genreId);
-      await refetchFavoriteGenres();
-    }
-  };
-
-  const handleRemoveGenre = async (genre: string) => {
-    const genreId = allGenres.find((g) => g.name === genre)?.id;
-    if (typeof genreId === "number") {
-      await genreService.removeFavorite(genreId);
-    }
-    await refetchFavoriteGenres();
-  };
+  const availableGenres = useMemo(
+    () => allGenres.filter((g) => !favoriteGenreIds.has(g.id)),
+    [allGenres, favoriteGenreIds]
+  );
 
   const handleSearchActors = useCallback(async (query: string) => {
     if (!query.trim()) {
@@ -162,49 +127,15 @@ export function AccountPage({
   }, []);
 
   const handleSelectActor = async (person: Person) => {
-    const currentActors = profile.favoriteActors || [];
-    const displayName = person.name_ru || person.name_en || `ID ${person.id}`;
-    if (currentActors.includes(displayName)) return;
-
-    try {
-      await personService.addFavorite(person.id);
-      // Локально обновляем профиль
-      onUpdateProfile({
-        ...profile,
-        favoriteActors: [...currentActors, displayName],
-      });
-      // И сразу же подтягиваем актуальный список с бэка
-      await refetchFavoritePersons();
-      setNewActor("");
-      setActorSuggestions([]);
-      toast.success("Актёр добавлен в любимые");
-    } catch (e) {
-      console.error(e);
-      toast.error("Не удалось добавить актёра в избранное");
-    }
-  };
-
-  const handleRemoveActor = async (person: Person) => {
-    try {
-      await personService.removeFavorite(person.id);
-      const displayName = person.name_ru || person.name_en || `ID ${person.id}`;
-      onUpdateProfile({
-        ...profile,
-        favoriteActors: profile.favoriteActors.filter((a) => a !== displayName),
-      });
-      await refetchFavoritePersons();
-      toast.success("Актёр удалён из избранного");
-    } catch (e) {
-      console.error(e);
-      toast.error("Не удалось удалить актёра из избранного");
-    }
+    await onAddPersonFavorite(person);
+    setNewActor("");
+    setActorSuggestions([]);
   };
 
   const handleToggleConnection = (
     platform: "imdb" | "kinopoisk",
   ) => {
     onUpdateProfile({
-      ...profile,
       [platform === "imdb"
         ? "imdbConnected"
         : "is_kinopoisk_synchronized"]:
@@ -220,7 +151,6 @@ export function AccountPage({
     try {
       await movieService.syncKinopoiskWatchHistory(Number(kinopoiskIdInput));
       onUpdateProfile({
-        ...profile,
         is_kinopoisk_synchronized: true,
       });
       setIsKinopoiskDialogOpen(false);
@@ -447,15 +377,28 @@ export function AccountPage({
                 ) : (
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                     {uniqueFavoriteMovies.map((movie) => (
-                      <MovieCard
-                        key={movie.id}
-                        movie={movie}
-                        onClick={() => onMovieClick(movie)}
-                      />
+                      <div key={movie.id} className="relative group">
+                        <MovieCard
+                          movie={movie}
+                          onClick={() => onMovieClick(movie)}
+                        />
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="icon"
+                          className="absolute top-2 right-2 h-8 w-8 opacity-90"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onToggleMovieFavorite(movie);
+                          }}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     ))}
-                    {(favoriteMovies || []).length === 0 && (
+                    {uniqueFavoriteMovies.length === 0 && (
                       <div className="col-span-full text-center py-8 text-muted-foreground">
-                        Избранное временно недоступно
+                        Нет избранных фильмов
                       </div>
                     )}
                   </div>
@@ -475,24 +418,23 @@ export function AccountPage({
               <CardContent className="space-y-6">
                 <div>
                   <div className="flex flex-wrap gap-2">
-                    {(profile.favoriteGenres || []).map((genre) => (
+                    {favoriteGenres.map((genre) => (
                       <Badge
-                        key={genre}
+                        key={genre.id}
                         variant="default"
                         className="gap-2"
                       >
-                        {genre}
+                        {genre.name}
                         <button
-                          onClick={() =>
-                            handleRemoveGenre(genre)
-                          }
+                          type="button"
+                          onClick={() => onRemoveGenre(genre)}
                           className="ml-1 hover:text-destructive"
                         >
                           <Trash2 className="h-3 w-3" />
                         </button>
                       </Badge>
                     ))}
-                    {(profile.favoriteGenres || []).length === 0 && (
+                    {favoriteGenres.length === 0 && (
                       <p className="text-muted-foreground">
                         Любимых жанров пока нет
                       </p>
@@ -503,22 +445,20 @@ export function AccountPage({
                 <div>
                   <h4 className="mb-3">Добавить жанр</h4>
                   <div className="flex flex-wrap gap-2">
-                    {(allGenres || [])
-                      .filter(
-                        (g) =>
-                          !(profile.favoriteGenres || []).includes(g.name),
-                      )
-                      .map((genre) => (
+                    {availableGenres.map((genre) => (
                         <Button
                           key={genre.id}
                           variant="outline"
                           size="sm"
-                          onClick={() => handleAddGenre(genre.name)}
+                          onClick={() => onAddGenre(genre)}
                         >
                           <Plus className="h-3 w-3 mr-1" />
                           {genre.name}
                         </Button>
                       ))}
+                    {availableGenres.length === 0 && allGenres.length === 0 && (
+                      <p className="text-muted-foreground">Список жанров недоступен</p>
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -551,24 +491,28 @@ export function AccountPage({
                         Поиск актёров...
                       </div>
                     )}
-                    {actorSuggestions.length > 0 && (
-                      <div className="space-y-1">
-                        {actorSuggestions.map((person) => (
-                          <div key={person.id} className="max-w-[200px]">
+                    {actorSuggestions.filter(
+                      (person) => !favoritePersons.some((p) => p.id === person.id)
+                    ).length > 0 && (
+                      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                        {actorSuggestions
+                          .filter((person) => !favoritePersons.some((p) => p.id === person.id))
+                          .map((person) => (
                             <PersonCard
+                              key={person.id}
                               person={person}
+                              compact
                               onClick={() => handleSelectActor(person)}
                             />
-                          </div>
-                        ))}
+                          ))}
                       </div>
                     )}
                   </div>
                 </div>
 
-                {(favoritePersonsRaw || []).length > 0 ? (
+                {favoritePersons.length > 0 ? (
                   <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                    {(favoritePersonsRaw || []).map((person) => (
+                    {favoritePersons.map((person) => (
                       <div key={person.id} className="relative group">
                         <PersonCard
                           person={person}
@@ -579,7 +523,10 @@ export function AccountPage({
                           variant="destructive"
                           size="icon"
                           className="absolute top-2 right-2 h-8 w-8 opacity-90"
-                          onClick={() => handleRemoveActor(person)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onRemovePersonFavorite(person);
+                          }}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
