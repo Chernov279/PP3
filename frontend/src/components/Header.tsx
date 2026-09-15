@@ -1,7 +1,16 @@
+import { useState } from "react";
 import { Search, LogIn, LogOut, Library } from "lucide-react";
 import { Button } from "./ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "./ui/avatar";
 import { ThemeToggle } from "./ThemeToggle";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "./ui/dialog";
 
 interface HeaderProps {
   onSearchClick: () => void;
@@ -12,7 +21,7 @@ interface HeaderProps {
   isAuthenticated: boolean;
   userName?: string;
   avatarUrl?: string | null;
-  onLogout: () => void;
+  onLogout: (allDevices?: boolean) => void | Promise<void>;
 }
 
 export function Header({
@@ -26,12 +35,25 @@ export function Header({
   avatarUrl,
   onLogout
 }: HeaderProps) {
+  const [logoutOpen, setLogoutOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
+
   const initials = (userName || "?")
     .split(" ")
     .filter(Boolean)
     .slice(0, 2)
     .map((p) => p[0]?.toUpperCase())
     .join("");
+
+  const handleLogoutChoice = async (allDevices: boolean) => {
+    setLoggingOut(true);
+    try {
+      await onLogout(allDevices);
+      setLogoutOpen(false);
+    } finally {
+      setLoggingOut(false);
+    }
+  };
 
   return (
     <header className="border-b border-border bg-background sticky top-0 z-50">
@@ -71,7 +93,12 @@ export function Header({
                   <AvatarFallback className="text-xs">{initials}</AvatarFallback>
                 </Avatar>
               </Button>
-              <Button variant="ghost" size="icon" onClick={onLogout} title="Выйти">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setLogoutOpen(true)}
+                title="Выйти"
+              >
                 <LogOut className="h-5 w-5" />
               </Button>
             </>
@@ -83,6 +110,43 @@ export function Header({
           )}
         </div>
       </div>
+
+      <Dialog open={logoutOpen} onOpenChange={setLogoutOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Выйти из аккаунта?</DialogTitle>
+            <DialogDescription>
+              Можно закрыть только эту сессию или сразу отозвать вход на всех устройствах.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col sm:flex-col gap-2 sm:space-x-0">
+            <Button
+              variant="outline"
+              className="w-full"
+              disabled={loggingOut}
+              onClick={() => handleLogoutChoice(false)}
+            >
+              Выйти
+            </Button>
+            <Button
+              variant="destructive"
+              className="w-full"
+              disabled={loggingOut}
+              onClick={() => handleLogoutChoice(true)}
+            >
+              Выйти со всех устройств
+            </Button>
+            <Button
+              variant="ghost"
+              className="w-full"
+              disabled={loggingOut}
+              onClick={() => setLogoutOpen(false)}
+            >
+              Отмена
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </header>
   );
 }

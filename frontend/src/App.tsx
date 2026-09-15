@@ -299,9 +299,9 @@ function AppContent() {
     }
   };
 
-  const handleLogout = () => {
-    logout();
-    toast.success("Вы вышли из аккаунта");
+  const handleLogout = async (allDevices = false) => {
+    await logout(allDevices);
+    toast.success(allDevices ? "Вы вышли со всех устройств" : "Вы вышли из аккаунта");
     setCurrentView("catalog");
     setOpenCollectionId(null);
   };

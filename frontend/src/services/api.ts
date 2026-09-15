@@ -343,6 +343,18 @@ export const authService = {
     return apiRequest<UserResponse>("/users/me");
   },
 
+  async logoutSession(): Promise<void> {
+    const refreshToken = getRefreshToken();
+    await apiRequest("/auth/logout", {
+      method: "POST",
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+  },
+
+  async logoutAllSessions(): Promise<void> {
+    await apiRequest("/auth/logout-all", { method: "POST" });
+  },
+
   logout() {
     clearTokens();
   }

@@ -13,7 +13,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<boolean>;
   register: (email: string, password: string, name: string) => Promise<boolean>;
-  logout: () => void;
+  logout: (allDevices?: boolean) => Promise<void>;
   updateUserProfile: (profile: Partial<UserProfile>) => Promise<void>;
   updateAvatar: (avatarUrl: string | null) => void;
   refreshProfile: () => Promise<void>;
@@ -142,7 +142,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const logout = () => {
+  const logout = useCallback(async (allDevices = false) => {
+    try {
+      if (allDevices) {
+        await authService.logoutAllSessions();
+      } else {
+        await authService.logoutSession();
+      }
+    } catch {
+      // Даже если сервер не отозвал токен, локальную сессию закрываем
+    }
     authService.logout();
     clearTokens();
     try {
@@ -151,7 +160,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       // ignore
     }
     setUser(null);
-  };
+  }, []);
 
   const updateUserProfile = useCallback(async (profile: Partial<UserProfile>) => {
     setUser((prev) => {
