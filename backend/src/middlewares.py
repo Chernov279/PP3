@@ -1,47 +1,52 @@
 import logging
-import json
+import time
+import uuid
+
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import Response
 
-logger = logging.getLogger("debug_middleware")
+logger = logging.getLogger("api")
 
-class DebugMiddleware(BaseHTTPMiddleware):
+IGNORED_PATHS = {"/health", "/health/live", "/docs", "/openapi.json", "/redoc"}
+
+
+class RequestLoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        # === Логируем запрос ===
-        logger.info(f"Request: {request.method} {request.url}")
-        logger.info(f"Headers: {dict(request.headers)}")
+        request_id = request.headers.get("X-Request-ID") or uuid.uuid4().hex[:12]
+        request.state.request_id = request_id
 
-        # Читаем тело запроса (только если есть)
-        body = await request.body()
-        if body:
-            try:
-                # Пытаемся распарсить как JSON для красивого вывода
-                logger.info(f"Request body: {json.loads(body)}")
-            except:
-                logger.info(f"Request body (raw): {body}")
+        start = time.perf_counter()
 
-        # Пропускаем запрос дальше
-        response = await call_next(request)
+        try:
+            response = await call_next(request)
+        except Exception:
+            duration_ms = (time.perf_counter() - start) * 1000
+            logger.exception(
+                "[%s] %s %s -> 500 (%.2f ms)",
+                request_id,
+                request.method,
+                request.url.path,
+                duration_ms,
+            )
+            raise
 
-        # === Логируем ответ ===
-        # Ответ нужно скопировать, так как оригинальный response.body_iterator будет исчерпан
-        response_body = b""
-        async for chunk in response.body_iterator:
-            response_body += chunk
+        duration_ms = (time.perf_counter() - start) * 1000
+        status_code = response.status_code
 
-        logger.info(f"Response status: {response.status_code}")
-        logger.info(f"Response headers: {dict(response.headers)}")
-        if response_body:
-            try:
-                logger.info(f"Response body: {json.loads(response_body)}")
-            except:
-                logger.info(f"Response body (raw): {response_body}")
+        response.headers["X-Request-ID"] = request_id
 
-        # Возвращаем новый ответ с тем же содержимым
-        return Response(
-            content=response_body,
-            status_code=response.status_code,
-            headers=dict(response.headers),
-            media_type=response.media_type
-        )
+        if request.url.path in IGNORED_PATHS and status_code < 400:
+            return response
+
+        log_line = "[%s] %s %s -> %s (%.2f ms)"
+        args = (request_id, request.method, request.url.path, status_code, duration_ms)
+
+        if status_code >= 500:
+            logger.error(log_line, *args)
+        elif status_code >= 400:
+            logger.warning(log_line, *args)
+        else:
+            logger.info(log_line, *args)
+
+        return response
+    

@@ -42,10 +42,12 @@ class AuthService:
 
         refresh_token = create_refresh_token()
         refresh_token_hash = hash_refresh_token(refresh_token)
-        token_data = RefreshTokenInternal(
-            user_id=user.id,
-            token_hash=refresh_token_hash,
-            expires_at=get_token_expires_at(),
+        await self._token_repo.create_refresh_token(
+            RefreshTokenInternal(
+                user_id=user.id,
+                token_hash=refresh_token_hash,
+                expires_at=get_token_expires_at(),
+            )
         )
 
         await self._session.commit()
@@ -160,4 +162,19 @@ class AuthService:
         return LogoutOut(
             device_logged_out=is_revoked,
             timestamp=datetime.now(timezone.utc).isoformat()
+        )
+
+
+    async def logout_all_user(
+        self,
+        user_id: int,
+    ) -> LogoutOut:
+
+        revoked_count = await self._token_repo.revoke_all_user_tokens(user_id)
+
+        await self._session.commit()
+
+        return LogoutOut(
+            device_logged_out=revoked_count > 0,
+            timestamp=datetime.now(timezone.utc).isoformat(),
         )
